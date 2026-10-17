@@ -1,11 +1,30 @@
 import type {
   AuthResponse,
+  CreateOutpassInput,
+  CreateVisitInput,
+  DashboardSummary,
+  Decision,
+  GateEventDto,
+  GateEventInput,
+  GateEventList,
+  GateVerdict,
+  GuardianshipDto,
+  HostList,
+  LinkGuardianInput,
   MeResponse,
-  RecordDto,
-  RecordList,
+  OutpassDto,
+  OutpassList,
+  OutpassStatus,
+  QrTokenResponse,
+  RegisterInput,
+  Role,
+  UserDto,
+  VisitDto,
+  VisitList,
+  WalkInInput,
 } from "@outpassed/shared";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
 export class ApiError extends Error {
   constructor(
@@ -25,21 +44,22 @@ type RequestOptions = {
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
-
-  if (response.status === 204) {
-    return undefined as T;
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers: {
+        ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch {
+    throw new ApiError("Can't reach the server. Check your connection.", 0, "NETWORK");
   }
 
+  if (response.status === 204) return undefined as T;
   const data = await response.json().catch(() => null);
-
   if (!response.ok) {
     throw new ApiError(
       data?.error?.message ?? `Request failed with status ${response.status}`,
@@ -47,46 +67,69 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       data?.error?.code,
     );
   }
-
   return data as T;
 }
 
+const qs = (params: Record<string, string | number | undefined>) => {
+  const s = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== "")
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join("&");
+  return s ? `?${s}` : "";
+};
+
+/** Thin typed wrapper over the Arvio API. Every authed call takes the token first. */
 export const api = {
-  register: (email: string, password: string) =>
-    request<AuthResponse>("/auth/register", {
-      method: "POST",
-      body: { email, password },
-    }),
-
+  // Auth
+  register: (input: RegisterInput) => request<AuthResponse>("/auth/register", { method: "POST", body: input }),
   login: (email: string, password: string) =>
-    request<AuthResponse>("/auth/login", {
-      method: "POST",
-      body: { email, password },
-    }),
-
+    request<AuthResponse>("/auth/login", { method: "POST", body: { email, password } }),
   me: (token: string) => request<MeResponse>("/auth/me", { token }),
 
-  listRecords: (token: string) =>
-    request<RecordList>("/records", { token }).then((r) => r.records),
+  // Outpasses
+  listOutpasses: (token: string, opts: { scope?: "all" | "actionable"; status?: OutpassStatus } = {}) =>
+    request<OutpassList>(`/outpasses${qs(opts)}`, { token }).then((r) => r.outpasses),
+  createOutpass: (token: string, input: CreateOutpassInput) =>
+    request<OutpassDto>("/outpasses", { method: "POST", token, body: input }),
+  getOutpass: (token: string, id: string) => request<OutpassDto>(`/outpasses/${id}`, { token }),
+  decideOutpass: (token: string, id: string, decision: Decision, reason?: string) =>
+    request<OutpassDto>(`/outpasses/${id}/decision`, { method: "POST", token, body: { decision, reason } }),
+  cancelOutpass: (token: string, id: string) =>
+    request<OutpassDto>(`/outpasses/${id}/cancel`, { method: "POST", token }),
+  outpassQr: (token: string, id: string) => request<QrTokenResponse>(`/outpasses/${id}/qr`, { token }),
 
-  createRecord: (
-    token: string,
-    input: { title: string; description?: string | null; status?: "active" | "archived" },
-  ) => request<RecordDto>("/records", { method: "POST", token, body: input }),
+  // Gate
+  scan: (token: string, qrToken: string) =>
+    request<GateVerdict>("/gate/scan", { method: "POST", token, body: { token: qrToken } }),
+  lookupRoll: (token: string, rollNo: string) => request<GateVerdict>(`/gate/lookup${qs({ rollNo })}`, { token }),
+  recordEvent: (token: string, input: GateEventInput) =>
+    request<GateEventDto>("/gate/events", { method: "POST", token, body: input }),
+  listEvents: (token: string, limit = 40) =>
+    request<GateEventList>(`/gate/events${qs({ limit })}`, { token }).then((r) => r.events),
 
-  getRecord: (token: string, id: string) =>
-    request<RecordDto>(`/records/${id}`, { token }),
+  // Visits
+  hosts: (token: string, q?: string) => request<HostList>(`/visits/hosts${qs({ q })}`, { token }).then((r) => r.hosts),
+  listVisits: (token: string, scope: "all" | "pending" | "onsite" = "all") =>
+    request<VisitList>(`/visits${qs({ scope })}`, { token }).then((r) => r.visits),
+  getVisit: (token: string, id: string) => request<VisitDto>(`/visits/${id}`, { token }),
+  createVisit: (token: string, input: CreateVisitInput) =>
+    request<VisitDto>("/visits", { method: "POST", token, body: input }),
+  walkIn: (token: string, input: WalkInInput) =>
+    request<VisitDto>("/visits/walk-in", { method: "POST", token, body: input }),
+  decideVisit: (token: string, id: string, decision: Decision) =>
+    request<VisitDto>(`/visits/${id}/decision`, { method: "POST", token, body: { decision } }),
+  visitQr: (token: string, id: string) => request<QrTokenResponse>(`/visits/${id}/qr`, { token }),
 
-  updateRecord: (
-    token: string,
-    id: string,
-    input: {
-      title?: string;
-      description?: string | null;
-      status?: "active" | "archived";
-    },
-  ) => request<RecordDto>(`/records/${id}`, { method: "PATCH", token, body: input }),
-
-  deleteRecord: (token: string, id: string) =>
-    request<void>(`/records/${id}`, { method: "DELETE", token }),
+  // Admin & dashboard
+  dashboard: (token: string) => request<DashboardSummary>("/dashboard/summary", { token }),
+  listUsers: (token: string, role?: Role) =>
+    request<{ users: UserDto[] }>(`/admin/users${qs({ role })}`, { token }).then((r) => r.users),
+  createStaff: (token: string, input: { email: string; password: string; name: string; phone?: string; role: "WARDEN" | "GUARD" | "ADMIN" }) =>
+    request<{ user: UserDto }>("/admin/users", { method: "POST", token, body: input }).then((r) => r.user),
+  linkGuardian: (token: string, input: LinkGuardianInput) =>
+    request<GuardianshipDto>("/admin/guardianships", { method: "POST", token, body: input }),
 };
+
+export function errorMessage(err: unknown, fallback = "Something went wrong"): string {
+  return err instanceof Error ? err.message : fallback;
+}

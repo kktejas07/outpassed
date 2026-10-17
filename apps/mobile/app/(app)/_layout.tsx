@@ -1,47 +1,17 @@
-import { Redirect, Stack, router } from "expo-router";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Redirect, Stack } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
 import { useSession } from "../../src/auth/session";
+import { color } from "../../src/theme/tokens";
 
 export default function AppLayout() {
-  const { status, signOut } = useSession();
-
+  const { status } = useSession();
   if (status === "loading") {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: color.white }}>
+        <ActivityIndicator color={color.gold} />
       </View>
     );
   }
-
-  if (status === "unauthenticated") {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  return (
-    <Stack
-      screenOptions={{
-        headerTitleAlign: "center",
-        headerRight: () => (
-          <Pressable
-            onPress={async () => {
-              await signOut();
-              router.replace("/(auth)/login");
-            }}
-            hitSlop={8}
-          >
-            <Text style={styles.signOut}>Sign out</Text>
-          </Pressable>
-        ),
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: "Records" }} />
-      <Stack.Screen name="new" options={{ title: "New record" }} />
-      <Stack.Screen name="[id]" options={{ title: "Record" }} />
-    </Stack>
-  );
+  if (status === "unauthenticated") return <Redirect href="/login" />;
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }} />;
 }
-
-const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  signOut: { color: "#2563eb", paddingHorizontal: 8 },
-});
