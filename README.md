@@ -1,4 +1,4 @@
-# Arvio (repo: outpassed)
+# Outpass
 
 Campus gate and outpass app for colleges, hostels and schools.
 
@@ -19,7 +19,7 @@ Stack: an **Expo (managed) React Native** app, a **Node + TypeScript
 ```
 apps/api       Fastify + Prisma API (Dockerized)
 apps/mobile    Expo Router app (React Native — ships via EAS, not Dokploy)
-apps/web       Arvio landing page (static, nginx, Dockerized)
+apps/web       Website: landing page at / and the web build of the app at /app (nginx, Dockerized)
 packages/shared  zod schemas + types shared by both
 docker-compose.yml  local Postgres + API
 ```
@@ -78,9 +78,9 @@ Only variables prefixed with `EXPO_PUBLIC_` are embedded in the app bundle.
 pnpm --filter @outpassed/api db:seed
 ```
 
-This creates one account per role, all with the password `arvio-demo-123`:
-`student@arvio.dev`, `parent@arvio.dev`, `warden@arvio.dev`, `guard@arvio.dev`
-and `admin@arvio.dev`, plus two more students (`karthik@`, `priya@`).
+This creates one account per role, all with the password `outpass-demo-123`:
+`student@outpass.dev`, `parent@outpass.dev`, `warden@outpass.dev`, `guard@outpass.dev`
+and `admin@outpass.dev`, plus two more students (`karthik@`, `priya@`).
 It also creates passes in a few states: pending, approved, and out/overdue.
 Re-running it resets the demo activity.
 
@@ -203,9 +203,17 @@ Create a Postgres service in Dokploy. Copy its connection string; that becomes
 - **Port:** expose `3000` and add a domain if you want one.
 - The container runs `prisma migrate deploy` automatically on boot.
 
-### 3. Landing page — Dokploy **Application** (optional)
+### 3. Website (landing page + web app) — Dokploy **Application**
 
-The Arvio landing page with the app's flows and screens, served by nginx. Screenshots live in `apps/web/screens`.
+Serves the landing page at `/` and the web version of the React Native app at
+`/app`. The image builds the app with `expo export -p web` in its first stage,
+so there's nothing to build by hand. Landing-page screenshots live in
+`apps/web/screens`.
+
+- **Build argument:** `EXPO_PUBLIC_API_URL` (default
+  `https://api.outpassed.studentalumni.ai`). The API URL is baked into the web
+  app at build time, so change it here, not in runtime env vars.
+- Point `CORS_ORIGIN` on the API at this site's origin (or leave `*`).
 
 - **Source:** this Git repository.
 - **Build type:** Dockerfile.
@@ -213,7 +221,6 @@ The Arvio landing page with the app's flows and screens, served by nginx. Screen
   - **Dockerfile path:** `apps/web/Dockerfile`
 - **Port:** expose `80` (attach a domain on port `80`).
 - **Liveness:** `GET /health` returns `ok`.
-- No environment variables required.
 
 Serve it on a different hostname from the API and point DNS at the same server.
 This project's layout:
@@ -240,8 +247,11 @@ npx eas-cli submit --platform ios
 Set `EXPO_PUBLIC_API_URL` to your deployed API URL in `eas.json` / the EAS
 environment so release builds point at production.
 
-> Optional: `npx expo export -p web` produces static assets Dokploy *can* serve
-> if you later want a web version. Not set up here.
+The same code also runs in a browser: `pnpm dev:mobile`, then press `w`
+(served at `http://localhost:8081/app`). The production web build is part of
+the website image above.
+
+App icon, Android adaptive icon and splash screen are in `apps/mobile/assets`.
 
 ## Notes & known constraints
 

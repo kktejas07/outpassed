@@ -11,7 +11,7 @@ import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
 const TOKEN_MESSAGES: Record<string, string> = {
-  MALFORMED: "This is not an Arvio pass",
+  MALFORMED: "This is not an Outpass pass",
   BAD_SIGNATURE: "This pass could not be verified",
   STALE: "This code has expired. Ask them to refresh the pass on their phone",
   FROM_FUTURE: "This code has an invalid time. Check the device clock",

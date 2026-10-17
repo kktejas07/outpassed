@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Arvio",
+    "name": "Outpass",
     "slug": "outpassed",
     "scheme": "outpassed",
     "version": "0.1.0",
@@ -12,27 +12,53 @@
       "expo-secure-store",
       "expo-font",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
         "expo-camera",
         {
-          "cameraPermission": "Arvio uses the camera to scan gate passes."
+          "cameraPermission": "Outpass uses the camera to scan gate passes.",
+          "recordAudioAndroid": false
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/app"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ai.studentalumni.outpassed"
+      "bundleIdentifier": "ai.studentalumni.outpassed",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Outpass uses the camera to scan gate passes."
+      }
     },
     "android": {
       "package": "ai.studentalumni.outpassed",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4338CA"
+      },
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Outpass",
+      "shortName": "Outpass",
+      "themeColor": "#1E1B4B",
       "backgroundColor": "#FAF9FE"
-    }
+    },
+    "icon": "./assets/icon.png"
   }
 }

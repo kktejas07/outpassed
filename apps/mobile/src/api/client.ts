@@ -78,7 +78,7 @@ const qs = (params: Record<string, string | number | undefined>) => {
   return s ? `?${s}` : "";
 };
 
-/** Thin typed wrapper over the Arvio API. Every authed call takes the token first. */
+/** Thin typed wrapper over the Outpass API. Every authed call takes the token first. */
 export const api = {
   // Auth
   register: (input: RegisterInput) => request<AuthResponse>("/auth/register", { method: "POST", body: input }),

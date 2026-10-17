@@ -50,7 +50,7 @@ function LinkParent({ student, onDone }: { student: UserDto; onDone: () => void 
   const f = useLinkGuardian(student.id, onDone);
   return (
     <View style={{ gap: 10, marginTop: 10 }}>
-      <Field label="Parent's email" value={f.parentEmail} onChangeText={f.setParentEmail} autoCapitalize="none" keyboardType="email-address" placeholder="Parent must have an Arvio account" />
+      <Field label="Parent's email" value={f.parentEmail} onChangeText={f.setParentEmail} autoCapitalize="none" keyboardType="email-address" placeholder="Parent must have an Outpass account" />
       <Field label="Relation" value={f.relation} onChangeText={f.setRelation} />
       {f.error ? <ErrorNote message={f.error} /> : null}
       <Button compact label="Link parent" loading={f.submitting} onPress={f.submit} />

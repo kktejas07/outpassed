@@ -3,7 +3,7 @@ import { Animated, Easing, StyleSheet, View } from "react-native";
 import { color, font } from "../theme/tokens";
 import { Text } from "../ui/Text";
 
-/** Arvio mark: an indigo arch (the gate) with a gold keystone that settles in. */
+/** Outpass mark: an indigo arch (the gate) with a gold keystone that settles in. */
 export function Brand({ size = 64 }: { size?: number }) {
   const drop = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -27,7 +27,7 @@ export function Brand({ size = 64 }: { size?: number }) {
           ]}
         />
       </View>
-      <Text style={{ fontFamily: font.display, fontSize: size * 0.44, color: color.ink, letterSpacing: -0.5 }}>arvio</Text>
+      <Text style={{ fontFamily: font.display, fontSize: size * 0.44, color: color.ink, letterSpacing: -0.5 }}>outpass</Text>
     </View>
   );
 }

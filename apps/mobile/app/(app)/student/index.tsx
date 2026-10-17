@@ -25,7 +25,7 @@ export default function StudentHome() {
   return (
     <Screen
       title={`${greeting()}, ${first}`}
-      eyebrow={[user?.student?.hostel, user?.student?.room ? `Room ${user.student.room}` : null].filter(Boolean).join(" · ") || "Arvio"}
+      eyebrow={[user?.student?.hostel, user?.student?.room ? `Room ${user.student.room}` : null].filter(Boolean).join(" · ") || "Outpass"}
       refreshing={vm.refreshing}
       onRefresh={vm.refresh}
     >

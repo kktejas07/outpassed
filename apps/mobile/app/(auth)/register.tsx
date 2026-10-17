@@ -50,7 +50,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen title="Create account" eyebrow="Arvio" back footer={<Button label="Create account" loading={submitting} onPress={onSubmit} />}>
+    <Screen title="Create account" eyebrow="Outpass" back footer={<Button label="Create account" loading={submitting} onPress={onSubmit} />}>
       <FadeIn>
         <Segmented options={[{ value: "STUDENT", label: "I'm a student" }, { value: "PARENT", label: "I'm a parent" }]} value={role} onChange={setRole} />
       </FadeIn>

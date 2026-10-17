@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
-import { Share, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { Platform, Share, StyleSheet, View } from "react-native";
 import { useVisitDetail } from "../../../src/features/visits/useVisits";
 import { visitorTypes, visitStatus, when } from "../../../src/lib/format";
 import { color, shadow } from "../../../src/theme/tokens";
@@ -15,6 +16,7 @@ import { Text } from "../../../src/ui/Text";
 export default function VisitDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const vm = useVisitDetail(id);
+  const [copied, setCopied] = useState(false);
   const v = vm.visit;
   if (!v) {
     return (
@@ -24,11 +26,23 @@ export default function VisitDetail() {
     );
   }
   const s = visitStatus(v);
-  const share = () =>
-    vm.qr &&
-    Share.share({
-      message: `Your Arvio visitor pass for ${when(v.validFrom)}–${when(v.validTo)}.\nShow this code at the gate:\n${vm.qr.token}`,
-    });
+  const message = vm.qr
+    ? `Your Outpass visitor pass for ${when(v.validFrom)}–${when(v.validTo)}.\nShow this code at the gate:\n${vm.qr.token}`
+    : "";
+  const share = async () => {
+    if (!vm.qr) return;
+    // Desktop browsers often have no share sheet: copy the pass instead.
+    if (Platform.OS === "web" && !(globalThis.navigator as Navigator | undefined)?.share) {
+      try {
+        await globalThis.navigator?.clipboard?.writeText(message);
+        setCopied(true);
+      } catch {
+        setCopied(false);
+      }
+      return;
+    }
+    await Share.share({ message }).catch(() => undefined);
+  };
 
   return (
     <Screen
@@ -36,7 +50,7 @@ export default function VisitDetail() {
       eyebrow={visitorTypes.find((t) => t.value === v.visitorType)?.label ?? "Visitor"}
       back
       right={<Pill label={s.label} tone={s.tone} />}
-      footer={vm.qr ? <Button icon="share-social-outline" label="Share pass with visitor" onPress={share} /> : undefined}
+      footer={vm.qr ? <Button icon={copied ? "checkmark" : "share-social-outline"} label={copied ? "Copied — paste it to the visitor" : "Share pass with visitor"} onPress={share} /> : undefined}
     >
       {vm.qr ? (
         <PopIn>

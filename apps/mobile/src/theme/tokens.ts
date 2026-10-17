@@ -1,6 +1,6 @@
 /**
- * Arvio design tokens: mostly white, gold for the pass and primary actions,
- * indigo for structure and text. Matches the "Arvio — App Prototype" canvas.
+ * Outpass design tokens: mostly white, gold for the pass and primary actions,
+ * indigo for structure and text. Matches the "Outpass — App Prototype" canvas.
  */
 export const color = {
   white: "#FFFFFF",

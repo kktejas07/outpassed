@@ -10,7 +10,7 @@ import { api, ApiError } from "../../api/client";
  */
 export type QueuedEvent = GateEventInput & { personName: string; queuedAt: string };
 
-const KEY = "arvio.gateQueue";
+const KEY = "outpass.gateQueue";
 let queue: QueuedEvent[] = [];
 let loaded = false;
 const listeners = new Set<(q: QueuedEvent[]) => void>();

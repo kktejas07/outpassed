@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/app/favicon.ico">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} img{max-width:100%}</style>
-<title>Arvio</title>
-<meta name="description" content="Arvio runs your campus gate: student outpasses approved by parents and wardens, live QR passes, guard scanning and visitor management.">
+<title>Outpass</title>
+<meta name="description" content="Outpass runs your campus gate: student outpasses approved by parents and wardens, live QR passes, guard scanning and visitor management.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=Sora:wght@600;700&display=swap">
@@ -166,6 +167,24 @@ section.block.alt { background: var(--ground); border-block: 1px solid var(--lin
 .feature p { color: var(--muted); font-size: 15px; }
 
 /* Closing */
+/* Devices */
+.devices { display: grid; grid-template-columns: 1.6fr 1fr; gap: 48px; align-items: center; }
+.devices > * { min-width: 0; }
+.browser { border-radius: 16px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.browser .bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--ground); }
+.browser .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+.browser .bar span { margin-left: 12px; flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.browser img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
+.device-copy { display: flex; flex-direction: column; gap: 18px; }
+.platforms { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.platform { display: grid; grid-template-columns: 92px 1fr; gap: 14px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.platform b { font-family: var(--display); font-size: 15px; }
+.platform span { color: var(--muted); font-size: 14.5px; }
+.web-views { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.web-views button { font: inherit; font-weight: 600; font-size: 13.5px; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+.web-views button[aria-pressed="true"] { border-color: var(--gold-light); background: var(--gold-soft); color: var(--gold-text); }
+@media (max-width: 960px) { .devices { grid-template-columns: 1fr; gap: 32px; } }
+
 .closing { background: var(--band); color: var(--band-ink); }
 .closing .wrap { padding-block: 64px; display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: space-between; }
 .closing h2 { font-size: clamp(26px, 3.4vw, 36px); max-width: 18em; }
@@ -204,13 +223,14 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#top" aria-label="Arvio home">
+    <a class="brand" href="#top" aria-label="Outpass home">
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#4338CA"/><path d="M18 56V34a14 14 0 0 1 28 0v22" fill="none" stroke="#FFFFFF" stroke-width="6"/><rect x="27.5" y="9.5" width="9" height="9" rx="2" transform="rotate(45 32 14)" fill="#E9C46A"/></svg>
-      arvio
+      outpass
     </a>
     <nav class="links" aria-label="Sections">
       <a href="#flows">How it works</a>
       <a href="#roles">Who uses it</a>
+      <a href="#devices">Devices</a>
       <a href="#screens">Screens</a>
     </nav>
   </div>
@@ -222,12 +242,12 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
       <div class="hero-copy">
         <span class="eyebrow">Outpasses · Visitors · Gate</span>
         <h1>Every exit approved. <em>Every return</em> on record.</h1>
-        <p class="lead">Arvio replaces the paper register at your hostel gate. Students request an outpass, parents and wardens approve it on their phones, and the guard scans a live QR code that can't be screenshotted and reused.</p>
+        <p class="lead">Outpass replaces the paper register at your hostel gate. Students request an outpass, parents and wardens approve it on their phones, and the guard scans a live QR code that can't be screenshotted and reused.</p>
         <div class="ctas">
           <a class="btn gold" href="#flows">See how it works</a>
           <a class="btn ghost" href="#screens">Browse all screens</a>
         </div>
-        <span class="soon">For colleges, hostels and schools. Coming to iOS and Android.</span>
+        <span class="soon">For colleges, hostels and schools. On iPhone, Android and the web.</span>
       </div>
       <div class="hero-art" aria-hidden="true">
         <div class="phone main"><img src="screens/student-pass.webp" alt="" width="585" height="1266"></div>
@@ -315,6 +335,37 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
     </div>
   </section>
 
+  <section class="block" id="devices">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">iPhone · Android · Web</span>
+        <h2>Made for phones, open in any browser</h2>
+        <p>Outpass is one React Native app. The same code ships to the App Store and Google Play and runs on the web, so a warden at a desk sees exactly what a guard sees at the gate.</p>
+      </div>
+      <div class="devices">
+        <div>
+          <div class="browser">
+            <div class="bar"><i></i><i></i><i></i><span>outpass · /app</span></div>
+            <img id="web-shot" src="screens/web-warden-campus.webp" alt="Outpass web app showing the Campus now dashboard" width="1600" height="1000" loading="lazy">
+          </div>
+          <div class="web-views" role="group" aria-label="Web app views">
+            <button type="button" data-shot="web-warden-campus" data-alt="Outpass web app showing the Campus now dashboard" aria-pressed="true">Warden dashboard</button>
+            <button type="button" data-shot="web-student-pass" data-alt="Outpass web app showing a student's gate pass" aria-pressed="false">Student gate pass</button>
+            <button type="button" data-shot="web-login" data-alt="Outpass web app sign-in screen" aria-pressed="false">Sign in</button>
+          </div>
+        </div>
+        <div class="device-copy">
+          <div class="platforms">
+            <div class="platform"><b>iPhone</b><span>Native app with the camera scanner, secure sign-in stored in the Keychain and the live gate pass.</span></div>
+            <div class="platform"><b>Android</b><span>The same app and screens, built for Android phones the guards already carry.</span></div>
+            <div class="platform"><b>Web</b><span>Runs in any browser at /app. On a wide screen it opens in a phone-width column; on a phone it fills the screen.</span></div>
+          </div>
+          <a class="btn gold" href="/app/" style="align-self:flex-start">Open the web app</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="block" id="screens">
     <div class="wrap">
       <div class="head">
@@ -354,7 +405,7 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
   <section class="closing">
     <div class="wrap">
       <div>
-        <h2>Bring Arvio to your hostel gate</h2>
+        <h2>Bring Outpass to your hostel gate</h2>
         <p>Start with one hostel and one gate. Students and parents sign up themselves; your office adds the wardens and guards.</p>
       </div>
       <a class="btn gold" href="#flows">See the outpass flow</a>
@@ -364,7 +415,7 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
 
 <footer>
   <div class="wrap">
-    <span>© 2026 Arvio</span>
+    <span>© 2026 Outpass</span>
     <span>Outpasses and visitors for colleges, hostels and schools</span>
   </div>
 </footer>
@@ -423,6 +474,17 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
     .map(([file, role, title, sub]) =>
       `<figure class="shot" data-role="${role}"><div class="phone"><img src="screens/${file}.webp" alt="${title}: ${sub}" loading="lazy" width="585" height="1266"></div><figcaption>${title}<span>${role === "all" ? "All roles" : role[0].toUpperCase() + role.slice(1)} · ${sub}</span></figcaption></figure>`)
     .join("");
+  // Web app view switcher
+  const webShot = document.getElementById("web-shot");
+  const webButtons = [...document.querySelectorAll(".web-views button")];
+  webButtons.forEach((b) =>
+    b.addEventListener("click", () => {
+      webShot.src = `screens/${b.dataset.shot}.webp`;
+      webShot.alt = b.dataset.alt;
+      webButtons.forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    }),
+  );
+
   const filters = [...document.querySelectorAll(".filters button")];
   filters.forEach((b) =>
     b.addEventListener("click", () => {

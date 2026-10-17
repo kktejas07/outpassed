@@ -7,6 +7,7 @@ import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider } from "../src/auth/session";
 import { color } from "../src/theme/tokens";
+import { WebFrame } from "../src/ui/WebFrame";
 
 export default function RootLayout() {
   const [loaded, failed] = useFonts({ Sora_600SemiBold, Sora_700Bold, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold });
@@ -16,7 +17,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SessionProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }} />
+        <WebFrame>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }} />
+        </WebFrame>
       </SessionProvider>
     </SafeAreaProvider>
   );

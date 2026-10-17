@@ -4,7 +4,7 @@ import { color, font } from "../theme/tokens";
 
 export type TabDef = { name: string; title: string; icon: keyof typeof Ionicons.glyphMap; iconOn: keyof typeof Ionicons.glyphMap };
 
-/** Bottom tabs in the Arvio style: white bar, gold active state. */
+/** Bottom tabs in the Outpass style: white bar, gold active state. */
 export function RoleTabs({ tabs }: { tabs: TabDef[] }) {
   return (
     <Tabs

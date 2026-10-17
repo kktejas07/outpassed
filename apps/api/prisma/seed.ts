@@ -4,12 +4,12 @@
  *
  *   pnpm --filter @outpassed/api db:seed
  *
- * Every demo account uses the password `arvio-demo-123`.
+ * Every demo account uses the password `outpass-demo-123`.
  */
 import argon2 from "argon2";
 import { prisma } from "../src/lib/prisma";
 
-const PASSWORD = "arvio-demo-123";
+const PASSWORD = "outpass-demo-123";
 const hours = (n: number) => new Date(Date.now() + n * 3_600_000);
 
 async function upsertUser(email: string, name: string, role: "STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN", phone?: string) {
@@ -22,15 +22,15 @@ async function upsertUser(email: string, name: string, role: "STUDENT" | "PARENT
 }
 
 async function main() {
-  const admin = await upsertUser("admin@arvio.dev", "Dr. Meera Iyer", "ADMIN");
-  const warden = await upsertUser("warden@arvio.dev", "Mr. Suresh Nair", "WARDEN", "+919800000001");
-  await upsertUser("guard@arvio.dev", "Ramesh (Main Gate)", "GUARD");
-  const parent = await upsertUser("parent@arvio.dev", "Lakshmi Rao", "PARENT", "+919800000002");
+  const admin = await upsertUser("admin@outpass.dev", "Dr. Meera Iyer", "ADMIN");
+  const warden = await upsertUser("warden@outpass.dev", "Mr. Suresh Nair", "WARDEN", "+919800000001");
+  await upsertUser("guard@outpass.dev", "Ramesh (Main Gate)", "GUARD");
+  const parent = await upsertUser("parent@outpass.dev", "Lakshmi Rao", "PARENT", "+919800000002");
 
   const students = [
-    { email: "student@arvio.dev", name: "Asha Rao", rollNo: "21CS104", room: "214" },
-    { email: "karthik@arvio.dev", name: "Karthik Menon", rollNo: "21ME231", room: "118" },
-    { email: "priya@arvio.dev", name: "Priya Shah", rollNo: "22EC057", room: "305" },
+    { email: "student@outpass.dev", name: "Asha Rao", rollNo: "21CS104", room: "214" },
+    { email: "karthik@outpass.dev", name: "Karthik Menon", rollNo: "21ME231", room: "118" },
+    { email: "priya@outpass.dev", name: "Priya Shah", rollNo: "22EC057", room: "305" },
   ];
   const ids: string[] = [];
   for (const s of students) {
@@ -98,7 +98,7 @@ async function main() {
   });
 
   console.log(`Seeded demo accounts. Password for all: ${PASSWORD}`);
-  console.log("  student@arvio.dev  parent@arvio.dev  warden@arvio.dev  guard@arvio.dev  admin@arvio.dev");
+  console.log("  student@outpass.dev  parent@outpass.dev  warden@outpass.dev  guard@outpass.dev  admin@outpass.dev");
 }
 
 main()
