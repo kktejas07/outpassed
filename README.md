@@ -53,6 +53,19 @@ Point the app at the API:
 - Android emulator: `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000`
 - Physical device: use your machine's LAN IP, e.g. `http://192.168.1.20:3000`
 
+### Where `EXPO_PUBLIC_API_URL` goes
+
+It is a **mobile-app build variable** — it does *not* belong in Dokploy (the
+backend and the static web page don't use it).
+
+- **Local development:** `apps/mobile/.env` (copy from `apps/mobile/.env.example`).
+- **Release builds:** the `env` blocks in `apps/mobile/eas.json`. The `preview`
+  and `production` profiles are already set to
+  `https://api.outpassed.studentalumni.ai`, so EAS-built binaries call
+  production automatically.
+
+Only variables prefixed with `EXPO_PUBLIC_` are embedded in the app bundle.
+
 ## API
 
 | Method   | Path             | Auth | Description                |
