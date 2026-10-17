@@ -120,8 +120,16 @@ A static "welcome / under construction" page, served by nginx.
 - **Liveness:** `GET /health` returns `ok`.
 - No environment variables required.
 
-Serve it on a different hostname from the API (e.g. `app.example.com`) and
-point DNS at the same server.
+Serve it on a different hostname from the API and point DNS at the same server.
+This project's layout:
+
+| Service | Hostname |
+| ------- | -------- |
+| Web placeholder | `https://outpassed.studentalumni.ai` |
+| API | `https://api.outpassed.studentalumni.ai` |
+
+> `api.outpassed.studentalumni.ai` is a third-level name, so it needs its own
+> DNS record — a `*.studentalumni.ai` wildcard will not cover it.
 
 ### 4. Mobile app — **not** deployed to Dokploy
 

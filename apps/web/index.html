@@ -142,7 +142,7 @@
 
       <p class="status">
         ● API status:
-        <a href="/api/health" id="api-status">checking…</a>
+        <a href="https://api.outpassed.studentalumni.ai/health" id="api-status">checking…</a>
       </p>
 
       <footer>© <span id="year">2026</span> Outpassed</footer>
@@ -152,7 +152,7 @@
       document.getElementById("year").textContent = new Date().getFullYear();
 
       // Probe the backend if it's reachable from this page, purely as a nicety.
-      fetch("https://outpassed.studentalumni.ai/health", { mode: "cors" })
+      fetch("https://api.outpassed.studentalumni.ai/health", { mode: "cors" })
         .then(function (r) {
           return r.ok ? r.json() : Promise.reject(r.status);
         })
