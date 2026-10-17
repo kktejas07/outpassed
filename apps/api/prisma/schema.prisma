@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  engineType = "client"
 }
 
 datasource db {
@@ -7,27 +8,201 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  STUDENT
+  PARENT
+  WARDEN
+  GUARD
+  ADMIN
+}
+
+enum OutpassType {
+  LOCAL
+  HOME
+  MEDICAL
+  EMERGENCY
+}
+
+enum OutpassStatus {
+  PENDING_PARENT
+  PENDING_WARDEN
+  APPROVED
+  REJECTED
+  CANCELLED
+  OUT
+  RETURNED
+}
+
+enum ApprovalStep {
+  PARENT
+  WARDEN
+}
+
+enum Decision {
+  APPROVE
+  REJECT
+}
+
+enum GateDirection {
+  EXIT
+  ENTRY
+}
+
+enum GateMethod {
+  QR
+  MANUAL
+}
+
+enum VisitStatus {
+  PENDING_HOST
+  APPROVED
+  REJECTED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+enum VisitorType {
+  GUEST
+  PARENT
+  RECRUITER
+  VENDOR
+  EVENT
+  ALUMNI
+  DELIVERY
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String
+  name         String
+  phone        String?
+  role         Role     @default(STUDENT)
   createdAt    DateTime @default(now())
-  records      Record[]
 
+  student         StudentProfile?
+  wards           Guardianship[]  @relation("ParentGuardianships")
+  guardians       Guardianship[]  @relation("StudentGuardianships")
+  outpasses       Outpass[]       @relation("StudentOutpasses")
+  approvals       Approval[]
+  hostedVisits    Visit[]         @relation("HostedVisits")
+  registeredVisits Visit[]        @relation("RegisteredVisits")
+  gateEvents      GateEvent[]
+
+  @@index([role])
   @@map("users")
 }
 
-// Placeholder entity. Rename/replace for the real domain (see spec §11).
-model Record {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  status      String   @default("active")
-  ownerId     String
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model StudentProfile {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNo      String?   @unique
+  hostel      String?
+  room        String?
+  dateOfBirth DateTime? @db.Date
 
-  @@index([ownerId])
-  @@map("records")
+  @@map("student_profiles")
+}
+
+/// Links a parent/guardian account to a student. Priority 1 is asked first.
+model Guardianship {
+  id        String   @id @default(uuid())
+  studentId String
+  student   User     @relation("StudentGuardianships", fields: [studentId], references: [id], onDelete: Cascade)
+  parentId  String
+  parent    User     @relation("ParentGuardianships", fields: [parentId], references: [id], onDelete: Cascade)
+  relation  String   @default("Parent")
+  priority  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, parentId])
+  @@index([parentId])
+  @@map("guardianships")
+}
+
+model Outpass {
+  id          String        @id @default(uuid())
+  studentId   String
+  student     User          @relation("StudentOutpasses", fields: [studentId], references: [id], onDelete: Cascade)
+  type        OutpassType
+  destination String
+  reason      String
+  leaveAt     DateTime
+  returnBy    DateTime
+  status      OutpassStatus
+  exitedAt    DateTime?
+  returnedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  approvals  Approval[]
+  gateEvents GateEvent[]
+
+  @@index([studentId, status])
+  @@index([status, returnBy])
+  @@map("outpasses")
+}
+
+model Approval {
+  id         String       @id @default(uuid())
+  outpassId  String
+  outpass    Outpass      @relation(fields: [outpassId], references: [id], onDelete: Cascade)
+  step       ApprovalStep
+  decision   Decision
+  approverId String
+  approver   User         @relation(fields: [approverId], references: [id])
+  /// True when a warden decided a parent step (parent unreachable).
+  override   Boolean      @default(false)
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  @@index([outpassId])
+  @@map("approvals")
+}
+
+model Visit {
+  id             String      @id @default(uuid())
+  visitorName    String
+  visitorPhone   String
+  visitorType    VisitorType @default(GUEST)
+  purpose        String
+  status         VisitStatus
+  walkIn         Boolean     @default(false)
+  validFrom      DateTime
+  validTo        DateTime
+  hostId         String
+  host           User        @relation("HostedVisits", fields: [hostId], references: [id], onDelete: Cascade)
+  registeredById String
+  registeredBy   User        @relation("RegisteredVisits", fields: [registeredById], references: [id])
+  checkedInAt    DateTime?
+  checkedOutAt   DateTime?
+  createdAt      DateTime    @default(now())
+
+  gateEvents GateEvent[]
+
+  @@index([hostId, status])
+  @@index([status])
+  @@map("visits")
+}
+
+model GateEvent {
+  /// Client-generated so offline retries are idempotent.
+  id         String        @id
+  direction  GateDirection
+  gate       String
+  method     GateMethod    @default(QR)
+  accepted   Boolean
+  personName String
+  note       String?
+  outpassId  String?
+  outpass    Outpass?      @relation(fields: [outpassId], references: [id], onDelete: SetNull)
+  visitId    String?
+  visit      Visit?        @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  guardId    String
+  guard      User          @relation(fields: [guardId], references: [id])
+  deviceTime DateTime?
+  createdAt  DateTime      @default(now())
+
+  @@index([createdAt])
+  @@map("gate_events")
 }

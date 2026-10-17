@@ -1,3 +1,7 @@
+# Metro (React Native) cannot follow pnpm's symlinked node_modules, so the
+# Expo app needs a hoisted layout. pnpm 11+ reads this here, not from .npmrc.
+nodeLinker: hoisted
+
 packages:
   - "apps/*"
   - "packages/*"

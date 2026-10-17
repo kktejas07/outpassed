@@ -1,13 +1,23 @@
 {
   "expo": {
-    "name": "Outpassed",
+    "name": "Arvio",
     "slug": "outpassed",
     "scheme": "outpassed",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Arvio uses the camera to scan gate passes."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },
@@ -21,7 +31,8 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "backgroundColor": "#FAF9FE"
     }
   }
 }

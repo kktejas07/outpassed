@@ -26,7 +26,7 @@ describe("auth", () => {
     const register = await app.inject({
       method: "POST",
       url: "/auth/register",
-      payload: { email, password: "password123" },
+      payload: { email, password: "password123", name: "Asha Rao", role: "STUDENT", rollNo: `R${Date.now()}` },
     });
     expect(register.statusCode).toBe(201);
     const registered = register.json();
@@ -52,7 +52,7 @@ describe("auth", () => {
 
   it("rejects a duplicate email", async () => {
     const email = uniqueEmail();
-    const payload = { email, password: "password123" };
+    const payload = { email, password: "password123", name: "Asha Rao" };
 
     const first = await app.inject({
       method: "POST",
@@ -75,7 +75,7 @@ describe("auth", () => {
     await app.inject({
       method: "POST",
       url: "/auth/register",
-      payload: { email, password: "password123" },
+      payload: { email, password: "password123", name: "Asha Rao" },
     });
 
     const login = await app.inject({
@@ -95,6 +95,26 @@ describe("auth", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("does not allow self-registering as staff", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { email: uniqueEmail(), password: "password123", name: "Mallory", role: "WARDEN" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("puts the role and student profile on the user", async () => {
+    const rollNo = `R${Date.now()}`;
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { email: uniqueEmail(), password: "password123", name: "Asha", role: "STUDENT", rollNo, hostel: "Block C" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().user).toMatchObject({ role: "STUDENT", student: { rollNo, hostel: "Block C" } });
   });
 
   it("rejects protected routes without a token", async () => {

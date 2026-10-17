@@ -1,12 +1,18 @@
-# Outpassed
+# Arvio (repo: outpassed)
 
-A full-stack starter scaffold: an **Expo (managed) React Native** app, a
-**Node + TypeScript (Fastify)** API, and **Postgres** via **Prisma**, wired
-together end to end and deployable to **Dokploy**.
+Campus gate and outpass app for colleges, hostels and schools.
 
-It ships one placeholder CRUD entity called `Record` (auth-protected, scoped to
-its owner) to prove the whole path works. Swap it for your real domain later —
-see [`docs/superpowers/specs/2026-10-17-outpassed-scaffold-design.md`](docs/superpowers/specs/2026-10-17-outpassed-scaffold-design.md) §11.
+- **Students** request an outpass and show a live QR code at the gate.
+- **Parents** approve or reject their child's requests.
+- **Wardens** give final approval. They can override a parent who hasn't
+  responded, with a logged reason, and see who is out or overdue.
+- **Guards** scan passes, check the face against the ID, record exits and
+  entries (queued offline if the network drops), and register walk-in visitors.
+- **Hosts** (faculty, wardens, students) invite visitors and approve walk-ins.
+- **Admins** create staff accounts and link parents to students.
+
+Stack: an **Expo (managed) React Native** app, a **Node + TypeScript
+(Fastify)** API, and **Postgres** via **Prisma**. Deployable to **Dokploy**.
 
 ## Layout
 
@@ -66,31 +72,104 @@ backend and the static web page don't use it).
 
 Only variables prefixed with `EXPO_PUBLIC_` are embedded in the app bundle.
 
+### Demo data
+
+```bash
+pnpm --filter @outpassed/api db:seed
+```
+
+This creates one account per role, all with the password `arvio-demo-123`:
+`student@arvio.dev`, `parent@arvio.dev`, `warden@arvio.dev`, `guard@arvio.dev`
+and `admin@arvio.dev`, plus two more students (`karthik@`, `priya@`).
+It also creates passes in a few states: pending, approved, and out/overdue.
+Re-running it resets the demo activity.
+
+## How it works
+
+**Outpass states**
+
+```
+PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approves──▶ APPROVED
+      │                                                                  │ exit scan
+      └─ warden override (reason required) ──────────────────────────────┤
+                                                                         ▼
+   REJECTED · CANCELLED (student, before leaving)           OUT ──entry scan──▶ RETURNED
+```
+
+- Parent approval is skipped when no parent is linked.
+- For students aged 18+ it is also skipped when `ADULT_PARENT_MODE=notify_only`.
+- "Overdue" is computed: the pass is `OUT` and the time is past `returnBy`.
+- A student can have one active pass at a time.
+
+**Gate QR codes**
+
+- Codes are HMAC-signed tokens, `v1.<payload>.<signature>`, that expire after
+  `QR_TTL_SECONDS` (default 45 s). The app refreshes them before then, so a
+  forwarded screenshot stops working.
+- `POST /gate/scan` only verifies: it returns a verdict and changes nothing.
+- Status changes when the guard confirms with `POST /gate/events`. Each event
+  carries a client-generated id, so the offline queue can retry safely.
+- Status updates are conditional, so double scans and parallel approvals
+  can't both win.
+
+**App structure (MVVM)**
+
+- Screens live in `apps/mobile/app/` (Expo Router). Each role has its own tab
+  group: `student`, `parent`, `warden`, `guard` and `admin`.
+- Each screen gets its state and actions from a viewmodel hook in
+  `src/features/*`.
+- Shared UI is in `src/ui` and `src/components`, and design tokens are in
+  `src/theme/tokens.ts`. The palette is white, gold and indigo, with Sora and
+  Manrope type.
+
 ## API
 
-| Method   | Path             | Auth | Description                |
-| -------- | ---------------- | ---- | -------------------------- |
-| `POST`   | `/auth/register` | —    | Create account, return JWT |
-| `POST`   | `/auth/login`    | —    | Log in, return JWT         |
-| `GET`    | `/auth/me`       | ✅   | Current user               |
-| `GET`    | `/records`       | ✅   | List your records          |
-| `POST`   | `/records`       | ✅   | Create a record            |
-| `GET`    | `/records/:id`   | ✅   | Read one record            |
-| `PATCH`  | `/records/:id`   | ✅   | Update a record            |
-| `DELETE` | `/records/:id`   | ✅   | Delete a record            |
-| `GET`    | `/health`        | —    | Liveness probe             |
+All routes except auth and health need a `Bearer` token. Roles are enforced
+on the server.
+
+| Method | Path | Who | Description |
+| --- | --- | --- | --- |
+| `POST` | `/auth/register` | — | Student or parent sign-up |
+| `POST` | `/auth/login` | — | Log in, return JWT |
+| `GET` | `/auth/me` | any | Current user, with student profile |
+| `GET` | `/outpasses?scope=all\|actionable` | student, parent, warden, admin | Passes the caller can see; `actionable` returns the ones waiting on them |
+| `POST` | `/outpasses` | student | Request a pass |
+| `GET` | `/outpasses/:id` | as above | One pass, with its approvals |
+| `POST` | `/outpasses/:id/decision` | parent, warden, admin | Approve or reject (an override needs a `reason`) |
+| `POST` | `/outpasses/:id/cancel` | student | Cancel before leaving |
+| `GET` | `/outpasses/:id/qr` | student | Fresh gate QR token |
+| `POST` | `/gate/scan` | guard, admin | Verify a QR (read-only verdict) |
+| `GET` | `/gate/lookup?rollNo=` | guard, admin | Active pass by roll number |
+| `POST` | `/gate/events` | guard, admin | Record an exit or entry (idempotent on `eventId`) |
+| `GET` | `/gate/events` | guard, warden, admin | Recent movements |
+| `GET` | `/visits?scope=all\|pending\|onsite` | any | Visits the caller hosts (staff see all) |
+| `POST` | `/visits` | student, warden, admin | Invite a visitor (pre-approved) |
+| `POST` | `/visits/walk-in` | guard, admin | Register a walk-in for host approval |
+| `POST` | `/visits/:id/decision` | host | Approve or decline a walk-in |
+| `GET` | `/visits/:id/qr` | host | Visitor pass token |
+| `GET` | `/visits/hosts?q=` | any | People a visitor can ask for |
+| `GET` | `/dashboard/summary` | warden, admin | Out now, overdue, pending, visitors, movements |
+| `POST` | `/admin/users` | admin | Create a warden, guard or admin |
+| `GET` | `/admin/users?role=` | admin | List accounts |
+| `POST` | `/admin/guardianships` | admin | Link a parent (by email) to a student |
+| `GET` | `/health` | — | Liveness probe |
 
 Errors are always `{ "error": { "code": "...", "message": "..." } }`.
 
 ## Tests
 
-Tests run against a real Postgres database, so start it first:
+The domain rules (approval chain, gate windows, QR tokens) have pure unit
+tests in `apps/api/test/unit`. Every route group also has integration tests,
+which run against a real Postgres:
 
 ```bash
 docker compose up -d db
-pnpm test           # auth + full CRUD + authorization tests
+pnpm test           # unit + integration
 pnpm typecheck      # all workspaces
 ```
+
+Integration tests add rows to whatever database `DATABASE_URL` points at.
+Point it at a scratch database, or re-run the seed afterwards.
 
 ## Deploying to Dokploy
 
@@ -117,6 +196,9 @@ Create a Postgres service in Dokploy. Copy its connection string; that becomes
   | `PORT`         | `3000`                                              |
   | `NODE_ENV`     | `production`                                        |
   | `CORS_ORIGIN`  | `*` or your allowed origins, comma-separated        |
+  | `QR_SECRET`    | separate long random string for gate codes (falls back to `JWT_SECRET`) |
+  | `QR_TTL_SECONDS` | `45`                                              |
+  | `ADULT_PARENT_MODE` | `approve` or `notify_only` (students 18+)      |
 
 - **Port:** expose `3000` and add a domain if you want one.
 - The container runs `prisma migrate deploy` automatically on boot.
@@ -163,15 +245,23 @@ environment so release builds point at production.
 
 ## Notes & known constraints
 
-- **pnpm + Metro:** `.npmrc` sets `node-linker=hoisted` because Metro (React
-  Native) cannot follow pnpm's default symlinked `node_modules`.
-- **Prisma 6.x** is pinned deliberately: Prisma 7 removed `url` from the schema
-  and requires `prisma.config.ts` + a driver adapter. Upgrade when you're ready.
-- The Prisma model is named `Record`, which collides with TypeScript's built-in
-  `Record<K, V>` utility type. It is imported as `RecordRow` in the API to keep
-  both usable.
+- **pnpm + Metro:** Metro (React Native) can't follow pnpm's symlinked
+  `node_modules`, so `pnpm-workspace.yaml` sets `nodeLinker: hoisted`. pnpm 11+
+  reads it there, not from `.npmrc`.
+- **Prisma 6.x, client engine:** the client uses `engineType = "client"` with
+  `@prisma/adapter-pg`, so no native query-engine binary is downloaded at
+  runtime. `prisma migrate` still uses Prisma's schema engine.
+- **Camera scanning** uses `expo-camera`. On web, and wherever camera access is
+  denied, the guard can look a student up by roll number instead.
+- **Visitor passes** are shared as a code through the system share sheet. A
+  hosted link that shows the QR to the visitor is a natural next step.
 
 ## Follow-ups (not built)
 
-Refresh-token rotation, password reset/email verification, social login, CI/CD,
-RBAC, and an optional web build hosted on Dokploy.
+- Push and SMS notifications to parents, wardens and hosts.
+- Offline QR verification at the gate (Ed25519-signed tokens).
+- Photo capture at the gate.
+- Bulk student import (CSV).
+- Refresh-token rotation and password reset.
+- Multi-campus tenancy.
+- CI/CD.

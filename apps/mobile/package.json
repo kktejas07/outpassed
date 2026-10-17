@@ -11,13 +11,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/manrope": "0.4.2",
+    "@expo-google-fonts/sora": "0.4.2",
+    "@expo/vector-icons": "15.1.1",
     "@outpassed/shared": "workspace:*",
     "expo": "~58.0.14",
+    "expo-camera": "58.0.10",
     "expo-constants": "~58.0.12",
+    "expo-crypto": "58.0.7",
+    "expo-font": "58.0.8",
     "expo-linking": "~58.0.13",
     "expo-router": "~58.0.23",
     "expo-secure-store": "~58.0.2",
     "expo-status-bar": "~58.0.3",
+    "qrcode": "1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.0",
@@ -26,6 +33,7 @@
     "react-native-web": "~0.21.4"
   },
   "devDependencies": {
+    "@types/qrcode": "1.5.6",
     "@types/react": "~19.3.0",
     "typescript": "~6.0.3"
   }

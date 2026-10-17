@@ -1,16 +1,16 @@
 import { Link } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Brand } from "../../src/components/Brand";
 import { useSession } from "../../src/auth/session";
+import { errorMessage } from "../../src/api/client";
+import { color } from "../../src/theme/tokens";
+import { Button } from "../../src/ui/Button";
+import { ErrorNote } from "../../src/ui/bits";
+import { Field } from "../../src/ui/Field";
+import { FadeIn } from "../../src/ui/motion";
+import { Screen } from "../../src/ui/Screen";
+import { Text } from "../../src/ui/Text";
 
 export default function LoginScreen() {
   const { signIn } = useSession();
@@ -24,84 +24,37 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
-      // Navigation is handled by the auth gate in app/index.tsx.
+      // The auth layout redirects to the role's home.
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed");
+      setError(errorMessage(err, "Sign in failed"));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.form}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          placeholder="you@example.com"
-        />
-
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoComplete="current-password"
-          placeholder="••••••••"
-        />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TouchableOpacity
-          style={[styles.button, submitting && styles.buttonDisabled]}
-          onPress={onSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign in</Text>
-          )}
-        </TouchableOpacity>
-
-        <Link href="/(auth)/register" style={styles.link}>
-          Don't have an account? Create one
-        </Link>
+    <Screen>
+      <View style={styles.top}>
+        <FadeIn><Brand /></FadeIn>
+        <FadeIn index={1}>
+          <Text variant="caption" style={{ textAlign: "center" }}>Outpasses and visitors for your campus</Text>
+        </FadeIn>
       </View>
-    </KeyboardAvoidingView>
+      <FadeIn index={2} style={{ gap: 14 }}>
+        <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@college.edu" />
+        <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" placeholder="••••••••" onSubmitEditing={onSubmit} />
+        {error ? <ErrorNote message={error} /> : null}
+        <Button label="Sign in" loading={submitting} onPress={onSubmit} disabled={!email || !password} />
+        <Link href="/register" style={styles.link}>
+          <Text variant="label" style={{ color: color.indigo }}>New student or parent? Create an account</Text>
+        </Link>
+        <Text variant="caption" style={{ textAlign: "center" }}>Wardens, guards and admins get their login from the college office.</Text>
+      </FadeIn>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  form: { gap: 8 },
-  label: { fontSize: 14, fontWeight: "600", marginTop: 8 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d4d4d8",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#111827",
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  error: { color: "#dc2626", marginTop: 8 },
-  link: { textAlign: "center", marginTop: 16, color: "#2563eb" },
+  top: { alignItems: "center", gap: 10, paddingTop: 56, paddingBottom: 20 },
+  link: { textAlign: "center", alignSelf: "center", marginTop: 4 },
 });

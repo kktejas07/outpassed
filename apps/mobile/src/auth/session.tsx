@@ -1,4 +1,4 @@
-import type { UserDto } from "@outpassed/shared";
+import type { RegisterInput, UserDto } from "@outpassed/shared";
 import {
   createContext,
   useContext,
@@ -17,7 +17,9 @@ type SessionValue = {
   user: UserDto | null;
   token: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (input: RegisterInput) => Promise<void>;
+  /** Re-fetches the current user (e.g. after a profile change). */
+  refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -68,12 +70,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUser(res.user);
         setStatus("authenticated");
       },
-      async signUp(email, password) {
-        const res = await api.register(email, password);
+      async signUp(input) {
+        const res = await api.register(input);
         await setToken(res.accessToken);
         setTokenState(res.accessToken);
         setUser(res.user);
         setStatus("authenticated");
+      },
+      async refresh() {
+        if (!token) return;
+        const { user } = await api.me(token);
+        setUser(user);
       },
       async signOut() {
         await clearToken();

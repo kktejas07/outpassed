@@ -10,19 +10,52 @@ import { z } from "zod";
 export const emailSchema = z.email().max(254);
 export const passwordSchema = z.string().min(8).max(200);
 export const uuidSchema = z.uuid();
+export const isoDateSchema = z.iso.datetime({ offset: true });
+
+export const idParamSchema = z.object({ id: uuidSchema });
+
+// --- Roles ---
+
+export const roleSchema = z.enum(["STUDENT", "PARENT", "WARDEN", "GUARD", "ADMIN"]);
+/** Roles anyone may self-register as. Staff accounts are created by an admin. */
+export const selfRegisterRoleSchema = z.enum(["STUDENT", "PARENT"]);
+export const staffRoleSchema = z.enum(["WARDEN", "GUARD", "ADMIN"]);
 
 // --- Auth ---
 
 export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
+  name: z.string().trim().min(1).max(120),
+  phone: z.string().trim().max(20).optional(),
+  role: selfRegisterRoleSchema.default("STUDENT"),
+  // Student-only profile fields.
+  rollNo: z.string().trim().max(40).optional(),
+  hostel: z.string().trim().max(80).optional(),
+  room: z.string().trim().max(20).optional(),
+  dateOfBirth: z.iso.date().optional(),
 });
-export const loginSchema = registerSchema;
+
+export const loginSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+});
+
+export const studentProfileSchema = z.object({
+  rollNo: z.string().nullable(),
+  hostel: z.string().nullable(),
+  room: z.string().nullable(),
+  dateOfBirth: z.string().nullable(),
+});
 
 export const userSchema = z.object({
   id: uuidSchema,
   email: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  role: roleSchema,
   createdAt: z.string(),
+  student: studentProfileSchema.nullable(),
 });
 
 export const authResponseSchema = z.object({
@@ -34,38 +67,248 @@ export const meResponseSchema = z.object({
   user: userSchema,
 });
 
-// --- Placeholder entity: Record ---
-// Swap this whole block for the real domain entity (see spec §11).
+// --- Admin ---
 
-export const recordStatusSchema = z.enum(["active", "archived"]);
-
-export const createRecordSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).nullish(),
-  status: recordStatusSchema.default("active"),
+export const createStaffSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  name: z.string().trim().min(1).max(120),
+  phone: z.string().trim().max(20).optional(),
+  role: staffRoleSchema,
 });
 
-export const updateRecordSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().max(2000).nullish(),
-  status: recordStatusSchema.optional(),
+export const linkGuardianSchema = z.object({
+  studentId: uuidSchema,
+  parentEmail: emailSchema,
+  relation: z.string().trim().min(1).max(40).default("Parent"),
+  priority: z.number().int().min(1).max(3).default(1),
 });
 
-export const recordSchema = z.object({
+export const guardianshipSchema = z.object({
   id: uuidSchema,
-  title: z.string(),
-  description: z.string().nullable(),
-  status: recordStatusSchema,
-  ownerId: uuidSchema,
+  studentId: uuidSchema,
+  parentId: uuidSchema,
+  relation: z.string(),
+  priority: z.number().int(),
+});
+
+// --- Outpass ---
+
+export const outpassTypeSchema = z.enum(["LOCAL", "HOME", "MEDICAL", "EMERGENCY"]);
+
+export const outpassStatusSchema = z.enum([
+  "PENDING_PARENT",
+  "PENDING_WARDEN",
+  "APPROVED",
+  "REJECTED",
+  "CANCELLED",
+  "OUT",
+  "RETURNED",
+]);
+
+export const decisionSchema = z.enum(["APPROVE", "REJECT"]);
+
+export const createOutpassSchema = z
+  .object({
+    type: outpassTypeSchema,
+    destination: z.string().trim().min(1).max(160),
+    reason: z.string().trim().min(1).max(500),
+    leaveAt: isoDateSchema,
+    returnBy: isoDateSchema,
+  })
+  .refine((v) => new Date(v.returnBy) > new Date(v.leaveAt), {
+    message: "returnBy must be after leaveAt",
+    path: ["returnBy"],
+  });
+
+export const outpassDecisionSchema = z.object({
+  decision: decisionSchema,
+  reason: z.string().trim().max(300).optional(),
+});
+
+export const approvalSchema = z.object({
+  id: uuidSchema,
+  step: z.enum(["PARENT", "WARDEN"]),
+  decision: decisionSchema,
+  approverId: uuidSchema,
+  approverName: z.string(),
+  override: z.boolean(),
+  reason: z.string().nullable(),
   createdAt: z.string(),
-  updatedAt: z.string(),
 });
 
-export const recordListSchema = z.object({
-  records: z.array(recordSchema),
+export const outpassSchema = z.object({
+  id: uuidSchema,
+  type: outpassTypeSchema,
+  destination: z.string(),
+  reason: z.string(),
+  leaveAt: z.string(),
+  returnBy: z.string(),
+  status: outpassStatusSchema,
+  overdue: z.boolean(),
+  exitedAt: z.string().nullable(),
+  returnedAt: z.string().nullable(),
+  createdAt: z.string(),
+  student: z.object({
+    id: uuidSchema,
+    name: z.string(),
+    rollNo: z.string().nullable(),
+    hostel: z.string().nullable(),
+    room: z.string().nullable(),
+  }),
+  approvals: z.array(approvalSchema),
 });
 
-export const idParamSchema = z.object({ id: uuidSchema });
+export const outpassListQuerySchema = z.object({
+  status: outpassStatusSchema.optional(),
+  /** "actionable" = waiting on the caller's decision. */
+  scope: z.enum(["all", "actionable"]).default("all"),
+});
+
+export const outpassListSchema = z.object({ outpasses: z.array(outpassSchema) });
+
+export const qrTokenResponseSchema = z.object({
+  token: z.string(),
+  /** Seconds until this token stops being accepted at the gate. */
+  expiresIn: z.number().int(),
+});
+
+// --- Gate ---
+
+export const gateDirectionSchema = z.enum(["EXIT", "ENTRY"]);
+
+export const gateScanSchema = z.object({
+  token: z.string().min(10).max(2000),
+});
+
+export const gateVerdictSchema = z.object({
+  allowed: z.boolean(),
+  /** Machine-readable reason, e.g. VALID, EXPIRED, NOT_YET_VALID, BAD_SIGNATURE. */
+  code: z.string(),
+  message: z.string(),
+  direction: gateDirectionSchema.nullable(),
+  kind: z.enum(["OUTPASS", "VISIT"]).nullable(),
+  subjectId: uuidSchema.nullable(),
+  person: z
+    .object({
+      name: z.string(),
+      detail: z.string(),
+    })
+    .nullable(),
+});
+
+export const gateEventInputSchema = z
+  .object({
+    /** Client-generated id so retries from the offline queue are idempotent. */
+    eventId: uuidSchema,
+    outpassId: uuidSchema.optional(),
+    visitId: uuidSchema.optional(),
+    direction: gateDirectionSchema,
+    gate: z.string().trim().min(1).max(60).default("Main Gate"),
+    method: z.enum(["QR", "MANUAL"]).default("QR"),
+    photoMatched: z.boolean().default(true),
+    note: z.string().trim().max(300).optional(),
+    deviceTime: isoDateSchema.optional(),
+  })
+  .refine((v) => Boolean(v.outpassId) !== Boolean(v.visitId), {
+    message: "Provide exactly one of outpassId or visitId",
+    path: ["outpassId"],
+  });
+
+export const gateEventSchema = z.object({
+  id: uuidSchema,
+  direction: gateDirectionSchema,
+  gate: z.string(),
+  method: z.enum(["QR", "MANUAL"]),
+  accepted: z.boolean(),
+  personName: z.string(),
+  outpassId: uuidSchema.nullable(),
+  visitId: uuidSchema.nullable(),
+  guardId: uuidSchema,
+  note: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const gateEventListSchema = z.object({ events: z.array(gateEventSchema) });
+
+// --- Visits ---
+
+export const visitStatusSchema = z.enum([
+  "PENDING_HOST",
+  "APPROVED",
+  "REJECTED",
+  "CHECKED_IN",
+  "CHECKED_OUT",
+]);
+
+export const visitorTypeSchema = z.enum([
+  "GUEST",
+  "PARENT",
+  "RECRUITER",
+  "VENDOR",
+  "EVENT",
+  "ALUMNI",
+  "DELIVERY",
+]);
+
+export const createVisitSchema = z
+  .object({
+    visitorName: z.string().trim().min(1).max(120),
+    visitorPhone: z.string().trim().min(5).max(20),
+    visitorType: visitorTypeSchema.default("GUEST"),
+    purpose: z.string().trim().min(1).max(200),
+    validFrom: isoDateSchema,
+    validTo: isoDateSchema,
+  })
+  .refine((v) => new Date(v.validTo) > new Date(v.validFrom), {
+    message: "validTo must be after validFrom",
+    path: ["validTo"],
+  });
+
+export const walkInSchema = z.object({
+  visitorName: z.string().trim().min(1).max(120),
+  visitorPhone: z.string().trim().min(5).max(20),
+  visitorType: visitorTypeSchema.default("GUEST"),
+  purpose: z.string().trim().min(1).max(200),
+  hostId: uuidSchema,
+  /** How long the visit may last once approved, in minutes. */
+  durationMinutes: z.number().int().min(15).max(720).default(180),
+});
+
+export const visitDecisionSchema = z.object({ decision: decisionSchema });
+
+export const visitSchema = z.object({
+  id: uuidSchema,
+  visitorName: z.string(),
+  visitorPhone: z.string(),
+  visitorType: visitorTypeSchema,
+  purpose: z.string(),
+  status: visitStatusSchema,
+  walkIn: z.boolean(),
+  validFrom: z.string(),
+  validTo: z.string(),
+  host: z.object({ id: uuidSchema, name: z.string() }),
+  checkedInAt: z.string().nullable(),
+  checkedOutAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const visitListSchema = z.object({ visits: z.array(visitSchema) });
+
+export const hostListSchema = z.object({
+  hosts: z.array(z.object({ id: uuidSchema, name: z.string(), role: roleSchema })),
+});
+
+// --- Dashboard ---
+
+export const dashboardSummarySchema = z.object({
+  outNow: z.number().int(),
+  overdue: z.number().int(),
+  pendingApprovals: z.number().int(),
+  visitorsOnSite: z.number().int(),
+  movementsToday: z.number().int(),
+  overdueList: z.array(outpassSchema),
+});
 
 // --- Errors ---
 
@@ -78,14 +321,36 @@ export const apiErrorSchema = z.object({
 
 // --- Inferred types ---
 
-export type RegisterInput = z.infer<typeof registerSchema>;
+export type Role = z.infer<typeof roleSchema>;
+export type RegisterInput = z.input<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type UserDto = z.infer<typeof userSchema>;
 export type AuthResponse = z.infer<typeof authResponseSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
-export type RecordStatus = z.infer<typeof recordStatusSchema>;
-export type CreateRecordInput = z.infer<typeof createRecordSchema>;
-export type UpdateRecordInput = z.infer<typeof updateRecordSchema>;
-export type RecordDto = z.infer<typeof recordSchema>;
-export type RecordList = z.infer<typeof recordListSchema>;
+export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+export type LinkGuardianInput = z.input<typeof linkGuardianSchema>;
+export type GuardianshipDto = z.infer<typeof guardianshipSchema>;
+export type OutpassType = z.infer<typeof outpassTypeSchema>;
+export type OutpassStatus = z.infer<typeof outpassStatusSchema>;
+export type Decision = z.infer<typeof decisionSchema>;
+export type CreateOutpassInput = z.infer<typeof createOutpassSchema>;
+export type OutpassDecisionInput = z.infer<typeof outpassDecisionSchema>;
+export type ApprovalDto = z.infer<typeof approvalSchema>;
+export type OutpassDto = z.infer<typeof outpassSchema>;
+export type OutpassList = z.infer<typeof outpassListSchema>;
+export type QrTokenResponse = z.infer<typeof qrTokenResponseSchema>;
+export type GateDirection = z.infer<typeof gateDirectionSchema>;
+export type GateScanInput = z.infer<typeof gateScanSchema>;
+export type GateVerdict = z.infer<typeof gateVerdictSchema>;
+export type GateEventInput = z.input<typeof gateEventInputSchema>;
+export type GateEventDto = z.infer<typeof gateEventSchema>;
+export type GateEventList = z.infer<typeof gateEventListSchema>;
+export type VisitStatus = z.infer<typeof visitStatusSchema>;
+export type VisitorType = z.infer<typeof visitorTypeSchema>;
+export type CreateVisitInput = z.input<typeof createVisitSchema>;
+export type WalkInInput = z.input<typeof walkInSchema>;
+export type VisitDto = z.infer<typeof visitSchema>;
+export type VisitList = z.infer<typeof visitListSchema>;
+export type HostList = z.infer<typeof hostListSchema>;
+export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;

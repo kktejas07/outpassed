@@ -12,6 +12,16 @@ const envSchema = z.object({
     .min(16, "JWT_SECRET must be at least 16 characters long"),
   JWT_EXPIRES_IN: z.string().default("7d"),
   CORS_ORIGIN: z.string().default("*"),
+  /** Signs gate QR codes. Falls back to JWT_SECRET when unset. */
+  QR_SECRET: z.string().min(16).optional(),
+  /** How long one rendered QR code is accepted at the gate. */
+  QR_TTL_SECONDS: z.coerce.number().int().min(10).max(600).default(45),
+  /**
+   * Parent approval for students aged 18+:
+   *   approve     — parent must still approve (default)
+   *   notify_only — skip the parent step; parents only get exit/return alerts
+   */
+  ADULT_PARENT_MODE: z.enum(["approve", "notify_only"]).default("approve"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -23,5 +33,8 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration:\n${issues}`);
 }
 
-export const env = parsed.data;
+export const env = {
+  ...parsed.data,
+  QR_SECRET: parsed.data.QR_SECRET ?? parsed.data.JWT_SECRET,
+};
 export type Env = typeof env;
