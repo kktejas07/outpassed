@@ -16,6 +16,11 @@ WORKDIR /app
 
 # --- Install workspace dependencies (cached on lockfile changes) ---
 FROM base AS deps
+# Toolchain for native modules (argon2) when no prebuilt binary is available.
+# Kept out of the runtime stage.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
