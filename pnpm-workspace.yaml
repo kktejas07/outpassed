@@ -1,0 +1,20 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+minimumReleaseAgeExclude:
+  - "@expo/cli@58.1.11"
+  - "@expo/schema-utils@58.0.2"
+  - "@fastify/jwt@10.2.5"
+  - babel-preset-expo@58.0.17
+  - expo-modules-core@58.0.22
+  - expo-modules-jsi@58.0.15
+  - expo-router@58.0.23
+  - expo@58.0.14
+
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  argon2: true
+  esbuild: true
+  prisma: true

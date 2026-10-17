@@ -1,0 +1,41 @@
+# Local development stack. Mirrors what Dokploy runs in production:
+# one Postgres service and one API service.
+#
+#   docker compose up -d db     # just the database (for running the API locally)
+#   docker compose up --build   # database + API container
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: outpassed
+      POSTGRES_PASSWORD: outpassed
+      POSTGRES_DB: outpassed
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outpassed"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://outpassed:outpassed@db:5432/outpassed
+      JWT_SECRET: dev-secret-change-me-at-least-16-chars
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+      NODE_ENV: production
+      CORS_ORIGIN: "*"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
