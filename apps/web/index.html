@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Outpassed — Coming Soon</title>
+    <meta name="description" content="Outpassed is under construction." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        background: #0b0b12;
+        background-image: radial-gradient(
+            60rem 60rem at 50% -10%,
+            rgba(99, 102, 241, 0.28),
+            transparent 60%
+          ),
+          radial-gradient(
+            40rem 40rem at 90% 110%,
+            rgba(236, 72, 153, 0.18),
+            transparent 60%
+          );
+        color: #e7e7ef;
+        padding: 24px;
+        text-align: center;
+      }
+      .card {
+        max-width: 560px;
+        width: 100%;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.12);
+        border: 1px solid rgba(99, 102, 241, 0.35);
+        border-radius: 999px;
+        padding: 8px 14px;
+        margin-bottom: 28px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #818cf8;
+        box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.7);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        70% {
+          box-shadow: 0 0 0 10px rgba(129, 140, 248, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(129, 140, 248, 0);
+        }
+      }
+      h1 {
+        font-size: clamp(2.5rem, 8vw, 4rem);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+        background: linear-gradient(180deg, #ffffff 0%, #9ca3af 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .welcome {
+        font-size: clamp(1.05rem, 3vw, 1.25rem);
+        color: #c7c7d1;
+        margin-top: 18px;
+        line-height: 1.6;
+      }
+      .sub {
+        font-size: 0.95rem;
+        color: #8b8b9a;
+        margin-top: 14px;
+        line-height: 1.6;
+      }
+      .rule {
+        height: 1px;
+        margin: 36px auto;
+        max-width: 220px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(148, 163, 184, 0.4),
+          transparent
+        );
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #86efac;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .status a {
+        color: #86efac;
+        text-decoration: none;
+        border-bottom: 1px dotted rgba(134, 239, 172, 0.5);
+      }
+      footer {
+        margin-top: 40px;
+        font-size: 12px;
+        color: #6b6b7b;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <span class="badge"><span class="dot"></span>Under construction</span>
+
+      <h1>Outpassed</h1>
+
+      <p class="welcome">
+        Welcome! We're building something great for students and alumni.
+      </p>
+      <p class="sub">
+        This site is a placeholder while the product is in development.
+        Check back soon.
+      </p>
+
+      <div class="rule"></div>
+
+      <p class="status">
+        ● API status:
+        <a href="/api/health" id="api-status">checking…</a>
+      </p>
+
+      <footer>© <span id="year">2026</span> Outpassed</footer>
+    </main>
+
+    <script>
+      document.getElementById("year").textContent = new Date().getFullYear();
+
+      // Probe the backend if it's reachable from this page, purely as a nicety.
+      fetch("https://outpassed.studentalumni.ai/health", { mode: "cors" })
+        .then(function (r) {
+          return r.ok ? r.json() : Promise.reject(r.status);
+        })
+        .then(function () {
+          document.getElementById("api-status").textContent = "ok";
+        })
+        .catch(function () {
+          document.getElementById("api-status").textContent = "unreachable";
+          document.getElementById("api-status").style.color = "#fca5a5";
+        });
+    </script>
+  </body>
+</html>

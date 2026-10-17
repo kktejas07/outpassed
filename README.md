@@ -12,7 +12,8 @@ see [`docs/superpowers/specs/2026-10-17-outpassed-scaffold-design.md`](docs/supe
 
 ```
 apps/api       Fastify + Prisma API (Dockerized)
-apps/mobile    Expo Router app
+apps/mobile    Expo Router app (React Native — ships via EAS, not Dokploy)
+apps/web       Static "under construction" page served by nginx (Dockerized)
 packages/shared  zod schemas + types shared by both
 docker-compose.yml  local Postgres + API
 ```
@@ -107,7 +108,22 @@ Create a Postgres service in Dokploy. Copy its connection string; that becomes
 - **Port:** expose `3000` and add a domain if you want one.
 - The container runs `prisma migrate deploy` automatically on boot.
 
-### 3. Mobile app — **not** deployed to Dokploy
+### 3. Web placeholder — Dokploy **Application** (optional)
+
+A static "welcome / under construction" page, served by nginx.
+
+- **Source:** this Git repository.
+- **Build type:** Dockerfile.
+  - **Build context:** `.` (the repo root)
+  - **Dockerfile path:** `apps/web/Dockerfile`
+- **Port:** expose `80` (attach a domain on port `80`).
+- **Liveness:** `GET /health` returns `ok`.
+- No environment variables required.
+
+Serve it on a different hostname from the API (e.g. `app.example.com`) and
+point DNS at the same server.
+
+### 4. Mobile app — **not** deployed to Dokploy
 
 A React Native app is distributed as a native binary via **EAS**, not hosted by
 Dokploy:
