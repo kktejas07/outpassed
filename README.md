@@ -19,7 +19,7 @@ Stack: an **Expo (managed) React Native** app, a **Node + TypeScript
 ```
 apps/api       Fastify + Prisma API (Dockerized)
 apps/mobile    Expo Router app (React Native — ships via EAS, not Dokploy)
-apps/web       Static "under construction" page served by nginx (Dockerized)
+apps/web       Arvio landing page (static, nginx, Dockerized)
 packages/shared  zod schemas + types shared by both
 docker-compose.yml  local Postgres + API
 ```
@@ -203,9 +203,9 @@ Create a Postgres service in Dokploy. Copy its connection string; that becomes
 - **Port:** expose `3000` and add a domain if you want one.
 - The container runs `prisma migrate deploy` automatically on boot.
 
-### 3. Web placeholder — Dokploy **Application** (optional)
+### 3. Landing page — Dokploy **Application** (optional)
 
-A static "welcome / under construction" page, served by nginx.
+The Arvio landing page with the app's flows and screens, served by nginx. Screenshots live in `apps/web/screens`.
 
 - **Source:** this Git repository.
 - **Build type:** Dockerfile.
@@ -220,7 +220,7 @@ This project's layout:
 
 | Service | Hostname |
 | ------- | -------- |
-| Web placeholder | `https://outpassed.studentalumni.ai` |
+| Landing page | `https://outpassed.studentalumni.ai` |
 | API | `https://api.outpassed.studentalumni.ai` |
 
 > `api.outpassed.studentalumni.ai` is a third-level name, so it needs its own
