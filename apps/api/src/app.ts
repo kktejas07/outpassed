@@ -5,7 +5,11 @@ import { registerAuth } from "./plugins/auth";
 import { registerErrorHandler } from "./plugins/errorHandler";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
-import { recordRoutes } from "./routes/record";
+import { adminRoutes } from "./routes/admin";
+import { dashboardRoutes } from "./routes/dashboard";
+import { gateRoutes } from "./routes/gate";
+import { outpassRoutes } from "./routes/outpass";
+import { visitRoutes } from "./routes/visit";
 
 /** Builds the Fastify instance. Kept separate from listen() so tests can inject. */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -26,7 +30,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
-  await app.register(recordRoutes);
+  await app.register(outpassRoutes);
+  await app.register(gateRoutes);
+  await app.register(visitRoutes);
+  await app.register(adminRoutes);
+  await app.register(dashboardRoutes);
 
   return app;
 }

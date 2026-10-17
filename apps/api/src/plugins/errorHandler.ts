@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { FlowError } from "../domain/outpassFlow";
 
 /** Error with a stable machine-readable code, rendered by the error handler. */
 export class HttpError extends Error {
@@ -27,6 +28,12 @@ export function registerErrorHandler(app: FastifyInstance): void {
           message: "Request validation failed",
         },
       });
+    }
+
+    if (error instanceof FlowError) {
+      return reply
+        .status(error.statusCode)
+        .send({ error: { code: error.code, message: error.message } });
     }
 
     if (error instanceof HttpError) {
