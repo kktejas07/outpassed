@@ -139,7 +139,7 @@ on the server.
 | `POST` | `/outpasses/:id/cancel` | student | Cancel before leaving |
 | `GET` | `/outpasses/:id/qr` | student | Fresh gate QR token |
 | `POST` | `/gate/scan` | guard, admin | Verify a QR (read-only verdict) |
-| `GET` | `/gate/lookup?rollNo=` | guard, admin | Active pass by roll number |
+| `GET` | `/gate/lookup?rollNo=` or `?code=` | guard, admin | Student's pass by roll number, or visitor's by 6-digit code |
 | `POST` | `/gate/events` | guard, admin | Record an exit or entry (idempotent on `eventId`) |
 | `GET` | `/gate/events` | guard, warden, admin | Recent movements |
 | `GET` | `/visits?scope=all\|pending\|onsite` | any | Visits the caller hosts (staff see all) |
@@ -152,6 +152,12 @@ on the server.
 | `POST` | `/admin/users` | admin | Create a warden, guard or admin |
 | `GET` | `/admin/users?role=` | admin | List accounts |
 | `POST` | `/admin/guardianships` | admin | Link a parent (by email) to a student |
+| `POST` | `/auth/forgot` | — | Email a 6-digit reset code |
+| `POST` | `/auth/reset` | — | Reset the password with the code (signs in) |
+| `GET` | `/notifications` | any | Your alerts and unread count |
+| `POST` | `/notifications/read` | any | Mark some or all read |
+| `POST` | `/devices` · `/devices/remove` | any | Register or remove this phone for push |
+| `GET` | `/public/visit-pass/:token` | — | Visitor's pass for the shared link |
 | `GET` | `/health` | — | Liveness probe |
 
 Errors are always `{ "error": { "code": "...", "message": "..." } }`.
@@ -252,6 +258,13 @@ The same code also runs in a browser: `pnpm dev:mobile`, then press `w`
 the website image above.
 
 App icon, Android adaptive icon and splash screen are in `apps/mobile/assets`.
+
+## Launching a pilot
+
+The steps that need your accounts and devices (Dokploy, DNS, push
+credentials, phone testing, store submission) are in
+[`docs/launch-checklist.md`](docs/launch-checklist.md). Store copy and privacy
+answers are in [`docs/store-listing.md`](docs/store-listing.md).
 
 ## Notes & known constraints
 

@@ -9,7 +9,7 @@ export function DashboardScreen() {
   const vm = useDashboard();
   const s = vm.summary;
   return (
-    <Screen title="Campus now" eyebrow="Live · refreshes every 30 s" refreshing={vm.refreshing} onRefresh={vm.refresh}>
+    <Screen title="Campus now" eyebrow="Live · refreshes every 30 s" refreshing={vm.refreshing} onRefresh={vm.refresh} bell>
       {vm.error ? <ErrorNote message={vm.error} onRetry={vm.refresh} /> : null}
       {vm.loading ? <Loading /> : null}
       {s ? (

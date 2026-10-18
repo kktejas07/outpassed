@@ -13,6 +13,8 @@ import { FlowError } from "../domain/outpassFlow";
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { toVisitDto, visitInclude } from "../lib/dto";
+import { notifyLater } from "../lib/notify";
+import { newPassToken, newVisitCode } from "../lib/visitCode";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
@@ -59,6 +61,8 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
         validTo: new Date(body.validTo),
         hostId: request.user.sub,
         registeredById: request.user.sub,
+        code: await newVisitCode(),
+        passToken: newPassToken(),
       },
       include: visitInclude,
     });
@@ -86,8 +90,16 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
         validTo: new Date(now.getTime() + body.durationMinutes * 60_000),
         hostId: host.id,
         registeredById: request.user.sub,
+        code: await newVisitCode(),
+        passToken: newPassToken(),
       },
       include: visitInclude,
+    });
+    notifyLater([host.id], {
+      kind: "VISITOR_AT_GATE",
+      title: `${row.visitorName} is at the gate`,
+      body: `${row.purpose}. Tap to let them in or decline.`,
+      data: { visitId: row.id },
     });
     return reply.status(201).send(toVisitDto(row));
   });
@@ -138,6 +150,15 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     });
     if (changed.count === 0) throw new FlowError("CONFLICT", "This visit was just updated");
     const updated = await prisma.visit.findUniqueOrThrow({ where: { id }, include: visitInclude });
+    if (updated.walkIn) {
+      // Tell the guard who registered the walk-in.
+      notifyLater([updated.registeredById], {
+        kind: "VISIT_DECIDED",
+        title: decision === "APPROVE" ? `Let ${updated.visitorName} in` : `${updated.visitorName} was declined`,
+        body: decision === "APPROVE" ? `${updated.host.name} approved the visit.` : `${updated.host.name} declined the visit.`,
+        data: { visitId: id },
+      });
+    }
     return toVisitDto(updated);
   });
 

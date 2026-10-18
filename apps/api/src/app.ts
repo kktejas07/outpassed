@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { env } from "./env";
+import { drainNotifications } from "./lib/notify";
 import { registerAuth } from "./plugins/auth";
 import { registerErrorHandler } from "./plugins/errorHandler";
 import { authRoutes } from "./routes/auth";
@@ -8,7 +9,9 @@ import { healthRoutes } from "./routes/health";
 import { adminRoutes } from "./routes/admin";
 import { dashboardRoutes } from "./routes/dashboard";
 import { gateRoutes } from "./routes/gate";
+import { notificationRoutes } from "./routes/notifications";
 import { outpassRoutes } from "./routes/outpass";
+import { publicRoutes } from "./routes/public";
 import { visitRoutes } from "./routes/visit";
 
 /** Builds the Fastify instance. Kept separate from listen() so tests can inject. */
@@ -21,6 +24,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   registerErrorHandler(app);
+  // Let in-flight notifications finish before the database connection closes.
+  app.addHook("onClose", async () => drainNotifications());
 
   await app.register(cors, {
     origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
@@ -35,6 +40,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(visitRoutes);
   await app.register(adminRoutes);
   await app.register(dashboardRoutes);
+  await app.register(notificationRoutes);
+  await app.register(publicRoutes);
 
   return app;
 }

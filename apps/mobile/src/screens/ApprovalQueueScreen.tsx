@@ -13,6 +13,7 @@ export function ApprovalQueueScreen() {
       eyebrow={waitingCount ? `${waitingCount} waiting on you` : vm.isWarden ? "Hostel requests" : "Your child's requests"}
       refreshing={vm.refreshing}
       onRefresh={vm.refresh}
+      bell
     >
       <Segmented
         options={[

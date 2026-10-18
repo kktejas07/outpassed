@@ -45,6 +45,9 @@ export default function LoginScreen() {
         <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" placeholder="••••••••" onSubmitEditing={onSubmit} />
         {error ? <ErrorNote message={error} /> : null}
         <Button label="Sign in" loading={submitting} onPress={onSubmit} disabled={!email || !password} />
+        <Link href={{ pathname: "/forgot", params: email ? { email } : {} }} style={styles.link}>
+          <Text variant="label" style={{ color: color.muted }}>Forgot password?</Text>
+        </Link>
         <Link href="/register" style={styles.link}>
           <Text variant="label" style={{ color: color.indigo }}>New student or parent? Create an account</Text>
         </Link>

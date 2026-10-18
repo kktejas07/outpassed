@@ -7,6 +7,7 @@ import type {
   VisitDto,
 } from "@outpassed/shared";
 import { isOverdue } from "../domain/outpassFlow";
+import { passUrl } from "./visitCode";
 
 /**
  * Prisma rows -> API DTOs. Dates are serialised to ISO strings so responses
@@ -96,6 +97,8 @@ export function toVisitDto(row: VisitWithHost): VisitDto {
     host: { id: row.host.id, name: row.host.name },
     checkedInAt: iso(row.checkedInAt),
     checkedOutAt: iso(row.checkedOutAt),
+    code: row.code,
+    passUrl: passUrl(row.passToken),
     createdAt: row.createdAt.toISOString(),
   };
 }

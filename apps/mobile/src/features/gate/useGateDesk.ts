@@ -37,11 +37,16 @@ export function useGateDesk() {
   }, [token, pending.length]);
 
   const check = useCallback(
-    async (input: { qr: string } | { rollNo: string }) => {
+    async (input: { qr: string } | { rollNo: string } | { visitCode: string }) => {
       if (!token) return;
       setState({ phase: "checking" });
       try {
-        const verdict = "qr" in input ? await api.scan(token, input.qr) : await api.lookupRoll(token, input.rollNo.trim());
+        const verdict =
+          "qr" in input
+            ? await api.scan(token, input.qr)
+            : "visitCode" in input
+              ? await api.lookupVisitCode(token, input.visitCode)
+              : await api.lookupRoll(token, input.rollNo.trim());
         setState({ phase: "verdict", verdict });
       } catch (err) {
         setState({ phase: "error", message: errorMessage(err) });

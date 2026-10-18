@@ -12,6 +12,9 @@ import type {
   HostList,
   LinkGuardianInput,
   MeResponse,
+  NotificationList,
+  PublicVisitPass,
+  ResetPasswordInput,
   OutpassDto,
   OutpassList,
   OutpassStatus,
@@ -85,6 +88,21 @@ export const api = {
   login: (email: string, password: string) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: { email, password } }),
   me: (token: string) => request<MeResponse>("/auth/me", { token }),
+  forgotPassword: (email: string) =>
+    request<{ ok: true; message: string }>("/auth/forgot", { method: "POST", body: { email } }),
+  resetPassword: (input: ResetPasswordInput) => request<AuthResponse>("/auth/reset", { method: "POST", body: input }),
+
+  // Notifications
+  notifications: (token: string) => request<NotificationList>("/notifications", { token }),
+  markRead: (token: string, ids?: string[]) =>
+    request<{ updated: number }>("/notifications/read", { method: "POST", token, body: ids ? { ids } : {} }),
+  registerDevice: (token: string, pushToken: string, platform: "ios" | "android" | "web") =>
+    request<void>("/devices", { method: "POST", token, body: { token: pushToken, platform } }),
+  removeDevice: (token: string, pushToken: string) =>
+    request<void>("/devices/remove", { method: "POST", token, body: { token: pushToken } }),
+
+  // Public (no sign-in)
+  visitPass: (passToken: string) => request<PublicVisitPass>(`/public/visit-pass/${encodeURIComponent(passToken)}`),
 
   // Outpasses
   listOutpasses: (token: string, opts: { scope?: "all" | "actionable"; status?: OutpassStatus } = {}) =>
@@ -102,6 +120,7 @@ export const api = {
   scan: (token: string, qrToken: string) =>
     request<GateVerdict>("/gate/scan", { method: "POST", token, body: { token: qrToken } }),
   lookupRoll: (token: string, rollNo: string) => request<GateVerdict>(`/gate/lookup${qs({ rollNo })}`, { token }),
+  lookupVisitCode: (token: string, code: string) => request<GateVerdict>(`/gate/lookup${qs({ code })}`, { token }),
   recordEvent: (token: string, input: GateEventInput) =>
     request<GateEventDto>("/gate/events", { method: "POST", token, body: input }),
   listEvents: (token: string, limit = 40) =>

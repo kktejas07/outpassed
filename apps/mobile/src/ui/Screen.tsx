@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color } from "../theme/tokens";
+import { Bell } from "./Bell";
 import { Text } from "./Text";
 
 /** Page shell: safe area, white header, scrolling body with pull-to-refresh. */
@@ -17,6 +18,7 @@ export function Screen({
   refreshing,
   onRefresh,
   scroll = true,
+  bell,
 }: {
   title?: string;
   eyebrow?: string;
@@ -27,6 +29,8 @@ export function Screen({
   refreshing?: boolean;
   onRefresh?: () => void;
   scroll?: boolean;
+  /** Show the alerts bell in the header. */
+  bell?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const header = title ? (
@@ -48,6 +52,7 @@ export function Screen({
           <Text variant="title" numberOfLines={1}>{title}</Text>
         </View>
         {right}
+        {bell ? <Bell /> : null}
       </View>
     </View>
   ) : (

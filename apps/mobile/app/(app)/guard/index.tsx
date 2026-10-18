@@ -33,7 +33,7 @@ export default function GuardScan() {
   const allowed = verdict?.allowed;
 
   return (
-    <Screen title="Main Gate" eyebrow="Security desk">
+    <Screen title="Main Gate" eyebrow="Security desk" bell>
       {desk.pending.length > 0 ? (
         <View style={styles.queue}>
           <Ionicons name="cloud-upload-outline" size={18} color={color.amber} />
@@ -49,7 +49,7 @@ export default function GuardScan() {
           <Segmented
             options={[
               { value: "camera", label: "Scan QR" },
-              { value: "manual", label: "Roll number" },
+              { value: "manual", label: "Code or roll no." },
             ]}
             value={mode}
             onChange={setMode}
@@ -86,19 +86,22 @@ export default function GuardScan() {
           ) : (
             <FadeIn style={{ gap: 12 }}>
               <Field
-                label="Roll number or pass code"
-                placeholder="e.g. 21CS104"
+                label="Visitor code or student roll number"
+                placeholder="e.g. 606088 or 21CS104"
                 autoCapitalize="characters"
                 value={manual}
                 onChangeText={setManual}
-                hint="For a student without their phone. Check their college ID."
+                hint="Visitors: the 6-digit code on their invite. Students without a phone: roll number, then check their college ID."
               />
               <Button
                 label="Look up"
                 icon="search"
                 loading={s.phase === "checking"}
                 disabled={!manual.trim()}
-                onPress={() => void desk.check(manual.trim().startsWith("v1.") ? { qr: manual.trim() } : { rollNo: manual })}
+                onPress={() => {
+                  const v = manual.trim();
+                  void desk.check(v.startsWith("v1.") ? { qr: v } : /^\d{6}$/.test(v) ? { visitCode: v } : { rollNo: v });
+                }}
               />
             </FadeIn>
           )}

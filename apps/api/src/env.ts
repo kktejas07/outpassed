@@ -22,6 +22,20 @@ const envSchema = z.object({
    *   notify_only — skip the parent step; parents only get exit/return alerts
    */
   ADULT_PARENT_MODE: z.enum(["approve", "notify_only"]).default("approve"),
+  /** Base URL of the website; visitor pass links point at `${PUBLIC_WEB_URL}/app/pass/<token>`. */
+  PUBLIC_WEB_URL: z.string().url().default("https://outpassed.studentalumni.ai"),
+  /** Shown on the visitor's pass. */
+  CAMPUS_NAME: z.string().default("Main Campus"),
+  CAMPUS_ADDRESS: z.string().default(""),
+  /** Phone push via Expo. Optional access token if the Expo project requires one. */
+  PUSH_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  EXPO_ACCESS_TOKEN: z.string().optional(),
+  /** Outgoing email (password reset codes), e.g. smtps://user:pass@smtp.example.com:465 */
+  SMTP_URL: z.string().optional(),
+  MAIL_FROM: z.string().default("Outpass <no-reply@outpassed.studentalumni.ai>"),
 });
 
 const parsed = envSchema.safeParse(process.env);

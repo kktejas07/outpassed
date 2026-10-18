@@ -12,6 +12,8 @@ import { applyDecision, canCancel, FlowError, initialStatus } from "../domain/ou
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { outpassInclude, toOutpassDto } from "../lib/dto";
+import { guardianIds, notifyLater, wardenIds } from "../lib/notify";
+import { when } from "../lib/time";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
@@ -109,6 +111,24 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       },
       include: outpassInclude,
     });
+
+    const name = row.student.name;
+    const summary = `${row.destination} · ${when(row.leaveAt)} to ${when(row.returnBy)}`;
+    if (status === "PENDING_PARENT") {
+      notifyLater(await guardianIds(studentId), {
+        kind: "OUTPASS_NEEDS_PARENT",
+        title: `${name} is asking to go out`,
+        body: `${summary}. Tap to approve or reject.`,
+        data: { outpassId: row.id },
+      });
+    } else {
+      notifyLater(await wardenIds(), {
+        kind: "OUTPASS_NEEDS_WARDEN",
+        title: `New outpass from ${name}`,
+        body: `${summary}. Waiting for your approval.`,
+        data: { outpassId: row.id },
+      });
+    }
     return reply.status(201).send(toOutpassDto(row));
   });
 
@@ -158,6 +178,45 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       });
       return tx.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
     });
+
+    const name = updated.student.name;
+    const data = { outpassId: id };
+    if (result.nextStatus === "PENDING_WARDEN") {
+      notifyLater([updated.studentId], {
+        kind: "OUTPASS_PARENT_APPROVED",
+        title: "Your parent approved",
+        body: `Your pass to ${updated.destination} is now with the warden.`,
+        data,
+      });
+      notifyLater(await wardenIds(), {
+        kind: "OUTPASS_NEEDS_WARDEN",
+        title: `${name}'s outpass is ready for you`,
+        body: `Parent approved · ${updated.destination} · ${when(updated.leaveAt)}.`,
+        data,
+      });
+    } else if (result.nextStatus === "APPROVED") {
+      notifyLater([updated.studentId], {
+        kind: "OUTPASS_APPROVED",
+        title: "Outpass approved",
+        body: `You're cleared for ${updated.destination} from ${when(updated.leaveAt)}. Show your gate pass at the gate.`,
+        data,
+      });
+      if (result.override) {
+        notifyLater(await guardianIds(updated.studentId), {
+          kind: "OUTPASS_APPROVED",
+          title: `The warden approved ${name}'s outpass`,
+          body: `${updated.destination} · ${when(updated.leaveAt)}. Reason: ${body.reason ?? ""}`.trim(),
+          data,
+        });
+      }
+    } else if (result.nextStatus === "REJECTED") {
+      notifyLater([updated.studentId], {
+        kind: "OUTPASS_REJECTED",
+        title: "Outpass not approved",
+        body: `Your request for ${updated.destination} was rejected${body.reason ? `: ${body.reason}` : "."}`,
+        data,
+      });
+    }
 
     return toOutpassDto(updated);
   });

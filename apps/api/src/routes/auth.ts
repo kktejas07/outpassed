@@ -1,6 +1,8 @@
+import { createHash, randomInt } from "node:crypto";
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
-import { loginSchema, registerSchema, type AuthResponse } from "@outpassed/shared";
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, type AuthResponse } from "@outpassed/shared";
+import { sendMail } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
 import { toUserDto } from "../lib/dto";
 import { HttpError } from "../plugins/errorHandler";
@@ -80,4 +82,63 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     return { user: toUserDto(user) };
   });
+
+  /**
+   * Emails a 6-digit reset code. Always answers the same way so the endpoint
+   * can't be used to find out which emails have accounts.
+   */
+  app.post("/auth/forgot", async (request) => {
+    const { email } = forgotPasswordSchema.parse(request.body);
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (user) {
+      const recent = await prisma.passwordReset.count({
+        where: { userId: user.id, createdAt: { gt: new Date(Date.now() - 15 * 60_000) } },
+      });
+      if (recent < 3) {
+        const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+        await prisma.passwordReset.create({
+          data: { userId: user.id, codeHash: hashCode(user.id, code), expiresAt: new Date(Date.now() + RESET_TTL_MS) },
+        });
+        await sendMail({
+          to: user.email,
+          subject: "Your Outpass password reset code",
+          text: `Hi ${user.name},\n\nYour code to reset your Outpass password is ${code}. It expires in 15 minutes.\n\nIf you didn't ask for this, you can ignore this email.`,
+        });
+      }
+    }
+    return { ok: true, message: "If that email has an account, we've sent a reset code to it." };
+  });
+
+  app.post("/auth/reset", async (request) => {
+    const body = resetPasswordSchema.parse(request.body);
+    const invalid = new HttpError(400, "INVALID_CODE", "That code is wrong or has expired. Request a new one.");
+    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() }, include: { student: true } });
+    if (!user) throw invalid;
+    const reset = await prisma.passwordReset.findFirst({
+      where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!reset || reset.attempts >= MAX_ATTEMPTS) throw invalid;
+    if (reset.codeHash !== hashCode(user.id, body.code)) {
+      await prisma.passwordReset.update({ where: { id: reset.id }, data: { attempts: { increment: 1 } } });
+      throw invalid;
+    }
+    const passwordHash = await argon2.hash(body.password, { type: argon2.argon2id });
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
+      prisma.passwordReset.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
+    ]);
+    const payload: AuthResponse = {
+      accessToken: app.jwt.sign({ sub: user.id, email: user.email, role: user.role }),
+      user: toUserDto(user),
+    };
+    return payload;
+  });
+}
+
+const RESET_TTL_MS = 15 * 60_000;
+const MAX_ATTEMPTS = 5;
+
+function hashCode(userId: string, code: string): string {
+  return createHash("sha256").update(`${userId}:${code}`).digest("hex");
 }

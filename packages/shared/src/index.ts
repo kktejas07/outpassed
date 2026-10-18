@@ -290,7 +290,25 @@ export const visitSchema = z.object({
   host: z.object({ id: uuidSchema, name: z.string() }),
   checkedInAt: z.string().nullable(),
   checkedOutAt: z.string().nullable(),
+  /** 6-digit code the visitor can read out at the gate instead of showing the QR. */
+  code: z.string(),
+  /** Public link to the visitor's pass (QR + code), for sharing over WhatsApp/SMS. */
+  passUrl: z.string(),
   createdAt: z.string(),
+});
+
+/** What the visitor sees on the public pass page. No contact details of the host. */
+export const publicVisitPassSchema = z.object({
+  visitorName: z.string(),
+  hostName: z.string(),
+  purpose: z.string(),
+  status: visitStatusSchema,
+  validFrom: z.string(),
+  validTo: z.string(),
+  code: z.string(),
+  /** Signed QR token; null once the visit is over or was declined. */
+  qrToken: z.string().nullable(),
+  campus: z.object({ name: z.string(), address: z.string() }),
 });
 
 export const visitListSchema = z.object({ visits: z.array(visitSchema) });
@@ -308,6 +326,43 @@ export const dashboardSummarySchema = z.object({
   visitorsOnSite: z.number().int(),
   movementsToday: z.number().int(),
   overdueList: z.array(outpassSchema),
+});
+
+// --- Notifications ---
+
+export const notificationSchema = z.object({
+  id: uuidSchema,
+  kind: z.string(),
+  title: z.string(),
+  body: z.string(),
+  data: z.record(z.string(), z.string()).nullable(),
+  readAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const notificationListSchema = z.object({
+  notifications: z.array(notificationSchema),
+  unread: z.number().int(),
+});
+
+export const markReadSchema = z.object({
+  /** Omit to mark everything read. */
+  ids: z.array(uuidSchema).max(200).optional(),
+});
+
+export const registerDeviceSchema = z.object({
+  token: z.string().min(10).max(300),
+  platform: z.enum(["ios", "android", "web"]),
+});
+
+// --- Password reset ---
+
+export const forgotPasswordSchema = z.object({ email: emailSchema });
+
+export const resetPasswordSchema = z.object({
+  email: emailSchema,
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+  password: passwordSchema,
 });
 
 // --- Errors ---
@@ -354,3 +409,8 @@ export type VisitList = z.infer<typeof visitListSchema>;
 export type HostList = z.infer<typeof hostListSchema>;
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
+export type PublicVisitPass = z.infer<typeof publicVisitPassSchema>;
+export type NotificationDto = z.infer<typeof notificationSchema>;
+export type NotificationList = z.infer<typeof notificationListSchema>;
+export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

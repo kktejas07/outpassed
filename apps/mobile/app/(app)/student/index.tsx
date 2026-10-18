@@ -28,6 +28,7 @@ export default function StudentHome() {
       eyebrow={[user?.student?.hostel, user?.student?.room ? `Room ${user.student.room}` : null].filter(Boolean).join(" · ") || "Outpass"}
       refreshing={vm.refreshing}
       onRefresh={vm.refresh}
+      bell
     >
       {vm.error ? <ErrorNote message={vm.error} onRetry={vm.refresh} /> : null}
       {vm.loading ? <Loading /> : null}

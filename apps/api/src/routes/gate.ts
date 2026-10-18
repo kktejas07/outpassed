@@ -7,6 +7,8 @@ import { verifyQrToken } from "../domain/qrToken";
 import { VISIT_QR_TTL_SECONDS } from "./visit";
 import { prisma } from "../lib/prisma";
 import { outpassInclude, toGateEventDto, type OutpassWithRelations } from "../lib/dto";
+import { guardianIds, notifyLater } from "../lib/notify";
+import { clock } from "../lib/time";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
@@ -53,6 +55,26 @@ function outpassVerdict(row: OutpassWithRelations, now: Date): GateVerdict {
   };
 }
 
+function visitVerdict(
+  visit: { id: string; status: "PENDING_HOST" | "APPROVED" | "REJECTED" | "CHECKED_IN" | "CHECKED_OUT"; validFrom: Date; validTo: Date; visitorName: string; purpose: string; host: { name: string } },
+  now: Date,
+): GateVerdict {
+  const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now });
+  const person = { name: visit.visitorName, detail: `Visiting ${visit.host.name} · ${visit.purpose}` };
+  if (!check.ok) {
+    return { allowed: false, code: check.code, message: check.message, direction: null, kind: "VISIT", subjectId: visit.id, person };
+  }
+  return {
+    allowed: true,
+    code: "VALID",
+    message: check.direction === "ENTRY" ? "Allow entry · visitor" : "Visitor leaving",
+    direction: check.direction,
+    kind: "VISIT",
+    subjectId: visit.id,
+    person,
+  };
+}
+
 export async function gateRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
 
@@ -76,31 +98,29 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
 
     const visit = await prisma.visit.findUnique({ where: { id: sub }, include: { host: true } });
     if (!visit) return denied("NOT_FOUND", "This visit does not exist");
-    const check = checkVisitAtGate({
-      status: visit.status,
-      validFrom: visit.validFrom,
-      validTo: visit.validTo,
-      now,
-    });
-    const person = { name: visit.visitorName, detail: `Visiting ${visit.host.name} · ${visit.purpose}` };
-    if (!check.ok) {
-      return { allowed: false, code: check.code, message: check.message, direction: null, kind: "VISIT", subjectId: visit.id, person } satisfies GateVerdict;
-    }
-    return {
-      allowed: true,
-      code: "VALID",
-      message: check.direction === "ENTRY" ? "Allow entry · visitor" : "Visitor leaving",
-      direction: check.direction,
-      kind: "VISIT",
-      subjectId: visit.id,
-      person,
-    } satisfies GateVerdict;
+    return visitVerdict(visit, now);
   });
 
-  /** For a student without their phone: look up their active pass by roll number. */
+  /**
+   * For someone without a phone to scan: a student's active pass by roll
+   * number, or a visitor's pass by the 6-digit code on their invite.
+   */
   app.get("/gate/lookup", async (request) => {
     requireRole(request, "GUARD", "ADMIN");
-    const { rollNo } = z.object({ rollNo: z.string().trim().min(1).max(40) }).parse(request.query);
+    const q = z
+      .object({ rollNo: z.string().trim().min(1).max(40).optional(), code: z.string().regex(/^\d{6}$/).optional() })
+      .refine((v) => Boolean(v.rollNo) !== Boolean(v.code), { message: "Provide rollNo or code" })
+      .parse(request.query);
+    if (q.code) {
+      const visit = await prisma.visit.findFirst({
+        where: { code: q.code, status: { in: ["PENDING_HOST", "APPROVED", "CHECKED_IN"] } },
+        include: { host: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!visit) return denied("NOT_FOUND", "No active visitor pass with this code");
+      return visitVerdict(visit, new Date());
+    }
+    const rollNo = q.rollNo!;
     const profile = await prisma.studentProfile.findUnique({ where: { rollNo } });
     if (!profile) return denied("NOT_FOUND", "No student with this roll number");
     const row = await prisma.outpass.findFirst({
@@ -165,6 +185,16 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
           data: { ...base, accepted: true, personName: row.student.name, outpassId: row.id },
         });
       });
+      const late = check.direction === "ENTRY" && now > row.returnBy;
+      notifyLater(await guardianIds(row.studentId), {
+        kind: check.direction === "EXIT" ? "STUDENT_LEFT" : "STUDENT_RETURNED",
+        title: check.direction === "EXIT" ? `${row.student.name} left campus` : `${row.student.name} is back on campus`,
+        body:
+          check.direction === "EXIT"
+            ? `Went out at ${clock(now)} for ${row.destination}. Due back ${clock(row.returnBy)}.`
+            : `Scanned in at ${clock(now)}${late ? ", after the return time" : ""}.`,
+        data: { outpassId: row.id },
+      });
       return reply.status(201).send(toGateEventDto(event));
     }
 
@@ -197,6 +227,14 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
         data: { ...base, accepted: true, personName: visit.visitorName, visitId: visit.id },
       });
     });
+    if (check.direction === "ENTRY") {
+      notifyLater([visit.hostId], {
+        kind: "VISITOR_ARRIVED",
+        title: `${visit.visitorName} has arrived`,
+        body: `Checked in at ${body.gate} at ${clock(now)}.`,
+        data: { visitId: visit.id },
+      });
+    }
     return reply.status(201).send(toGateEventDto(event));
   });
 

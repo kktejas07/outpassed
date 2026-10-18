@@ -8,6 +8,7 @@
  */
 import argon2 from "argon2";
 import { prisma } from "../src/lib/prisma";
+import { newPassToken, newVisitCode } from "../src/lib/visitCode";
 
 const PASSWORD = "outpass-demo-123";
 const hours = (n: number) => new Date(Date.now() + n * 3_600_000);
@@ -52,6 +53,7 @@ async function main() {
 
   // Reset demo activity so the screens always show a fresh picture.
   await prisma.outpass.deleteMany({ where: { studentId: { in: ids } } });
+  await prisma.notification.deleteMany({});
   await prisma.visit.deleteMany({ where: { hostId: { in: [warden.id, admin.id] } } });
 
   await prisma.outpass.create({
@@ -94,6 +96,8 @@ async function main() {
       validTo: hours(5),
       hostId: admin.id,
       registeredById: admin.id,
+      code: await newVisitCode(),
+      passToken: newPassToken(),
     },
   });
 

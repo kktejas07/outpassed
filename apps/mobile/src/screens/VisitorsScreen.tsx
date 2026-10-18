@@ -18,6 +18,7 @@ export function VisitorsScreen() {
       eyebrow={user?.role === "STUDENT" ? "People coming to see you" : "Guests, vendors, parents"}
       refreshing={vm.refreshing}
       onRefresh={vm.refresh}
+      bell
       right={<Button compact icon="add" label="Invite" onPress={() => router.push("/visit/new")} />}
     >
       <Segmented

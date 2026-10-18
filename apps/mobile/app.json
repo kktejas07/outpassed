@@ -12,6 +12,12 @@
       "expo-secure-store",
       "expo-font",
       [
+        "expo-notifications",
+        {
+          "color": "#4338CA"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

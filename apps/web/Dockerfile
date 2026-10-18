@@ -29,6 +29,7 @@ RUN cd apps/mobile && CI=1 pnpm exec expo export -p web --output-dir /out
 FROM nginx:1.29-alpine
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY apps/web/index.html /usr/share/nginx/html/index.html
+COPY apps/web/privacy.html /usr/share/nginx/html/privacy.html
 COPY apps/web/screens /usr/share/nginx/html/screens
 COPY --from=app /out /usr/share/nginx/html/app
 

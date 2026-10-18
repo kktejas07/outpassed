@@ -88,6 +88,9 @@ model User {
   hostedVisits    Visit[]         @relation("HostedVisits")
   registeredVisits Visit[]        @relation("RegisteredVisits")
   gateEvents      GateEvent[]
+  notifications   Notification[]
+  pushTokens      PushToken[]
+  passwordResets  PasswordReset[]
 
   @@index([role])
   @@map("users")
@@ -132,6 +135,8 @@ model Outpass {
   status      OutpassStatus
   exitedAt    DateTime?
   returnedAt  DateTime?
+  /// Set once the overdue alert has gone out, so it's sent only once.
+  overdueAlertedAt DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -176,12 +181,17 @@ model Visit {
   registeredBy   User        @relation("RegisteredVisits", fields: [registeredById], references: [id])
   checkedInAt    DateTime?
   checkedOutAt   DateTime?
+  /// 6-digit entry code the visitor can read out at the gate.
+  code           String
+  /// Unguessable id for the public pass link sent to the visitor.
+  passToken      String      @unique
   createdAt      DateTime    @default(now())
 
   gateEvents GateEvent[]
 
   @@index([hostId, status])
   @@index([status])
+  @@index([code])
   @@map("visits")
 }
 
@@ -205,4 +215,50 @@ model GateEvent {
 
   @@index([createdAt])
   @@map("gate_events")
+}
+
+/// In-app inbox entry; also sent as a phone push when the user has a device registered.
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  /// Where tapping it should go, e.g. { "outpassId": "..." }.
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// Expo push token for one installed app.
+model PushToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+/// Emailed 6-digit code for resetting a password. Only the hash is stored.
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@map("password_resets")
 }
