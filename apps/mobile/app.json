@@ -50,7 +50,7 @@
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#4338CA"
+        "backgroundColor": "#14B8A6"
       },
       "permissions": [
         "android.permission.CAMERA"
@@ -63,7 +63,7 @@
       "name": "Outpass",
       "shortName": "Outpass",
       "themeColor": "#1E1B4B",
-      "backgroundColor": "#FAF9FE"
+      "backgroundColor": "#F5F6FB"
     },
     "icon": "./assets/icon.png"
   }

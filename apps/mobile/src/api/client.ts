@@ -13,6 +13,13 @@ import type {
   LinkGuardianInput,
   MeResponse,
   NotificationList,
+  CreateNoticeInput,
+  NoticeList,
+  ParcelDto,
+  ParcelList,
+  SosDto,
+  SosKind,
+  SosList,
   PublicVisitPass,
   ResetPasswordInput,
   OutpassDto,
@@ -115,6 +122,31 @@ export const api = {
   cancelOutpass: (token: string, id: string) =>
     request<OutpassDto>(`/outpasses/${id}/cancel`, { method: "POST", token }),
   outpassQr: (token: string, id: string) => request<QrTokenResponse>(`/outpasses/${id}/qr`, { token }),
+  requestExtension: (token: string, id: string, requestedReturnBy: string, reason: string) =>
+    request<OutpassDto>(`/outpasses/${id}/extend`, { method: "POST", token, body: { requestedReturnBy, reason } }),
+  decideExtension: (token: string, id: string, decision: Decision) =>
+    request<OutpassDto>(`/outpasses/${id}/extend/decision`, { method: "POST", token, body: { decision } }),
+
+  // Parcels
+  parcels: (token: string, scope: "waiting" | "recent" = "waiting") =>
+    request<ParcelList>(`/parcels${qs({ scope })}`, { token }).then((r) => r.parcels),
+  logParcel: (token: string, input: { rollNo: string; carrier: string; note?: string }) =>
+    request<ParcelDto>("/parcels", { method: "POST", token, body: input }),
+  collectParcel: (token: string, id: string, code: string) =>
+    request<ParcelDto>(`/parcels/${id}/collect`, { method: "POST", token, body: { code } }),
+
+  // SOS
+  sosList: (token: string) => request<SosList>("/sos", { token }).then((r) => r.alerts),
+  raiseSos: (token: string, kind: SosKind, note?: string) => request<SosDto>("/sos", { method: "POST", token, body: { kind, note } }),
+  acknowledgeSos: (token: string, id: string) => request<SosDto>(`/sos/${id}/acknowledge`, { method: "POST", token }),
+  resolveSos: (token: string, id: string, resolution?: string) =>
+    request<SosDto>(`/sos/${id}/resolve`, { method: "POST", token, body: resolution ? { resolution } : {} }),
+
+  // Notices
+  notices: (token: string) => request<NoticeList>("/notices", { token }),
+  postNotice: (token: string, input: CreateNoticeInput) => request<{ id: string }>("/notices", { method: "POST", token, body: input }),
+  readNotice: (token: string, id: string) => request<void>(`/notices/${id}/read`, { method: "POST", token }),
+  deleteNotice: (token: string, id: string) => request<void>(`/notices/${id}`, { method: "DELETE", token }),
 
   // Gate
   scan: (token: string, qrToken: string) =>

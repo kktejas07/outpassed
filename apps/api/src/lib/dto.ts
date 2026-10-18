@@ -41,6 +41,7 @@ export function toUserDto(user: User & { student?: StudentProfile | null }): Use
 export const outpassInclude = {
   student: { include: { student: true } },
   approvals: { include: { approver: true }, orderBy: { createdAt: "asc" } },
+  extensions: { include: { decidedBy: true }, orderBy: { createdAt: "desc" }, take: 1 },
 } satisfies Prisma.OutpassInclude;
 
 export type OutpassWithRelations = Prisma.OutpassGetPayload<{ include: typeof outpassInclude }>;
@@ -77,6 +78,17 @@ export function toOutpassDto(row: OutpassWithRelations, now: Date = new Date()):
         createdAt: a.createdAt.toISOString(),
       }),
     ),
+    extension: row.extensions[0]
+      ? {
+          id: row.extensions[0].id,
+          previousReturnBy: row.extensions[0].previousReturnBy.toISOString(),
+          requestedReturnBy: row.extensions[0].requestedReturnBy.toISOString(),
+          reason: row.extensions[0].reason,
+          status: row.extensions[0].status,
+          decidedByName: row.extensions[0].decidedBy?.name ?? null,
+          createdAt: row.extensions[0].createdAt.toISOString(),
+        }
+      : null,
   };
 }
 

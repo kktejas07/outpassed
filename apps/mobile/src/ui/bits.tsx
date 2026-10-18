@@ -4,7 +4,7 @@ import { color, font, radius } from "../theme/tokens";
 import { FadeIn } from "./motion";
 import { Text } from "./Text";
 
-export function Avatar({ name, size = 40, tone = "indigo" }: { name: string; size?: number; tone?: "indigo" | "gold" }) {
+export function Avatar({ name, size = 40, tone = "indigo" }: { name: string; size?: number; tone?: "indigo" | "accent" }) {
   const initials = name
     .replace(/\(.*?\)/g, "")
     .replace(/[^\p{L}\s]/gu, "")
@@ -21,12 +21,12 @@ export function Avatar({ name, size = 40, tone = "indigo" }: { name: string; siz
         borderRadius: size / 2,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: tone === "gold" ? color.goldSoft : color.indigoTint,
-        borderWidth: tone === "gold" ? 1.5 : 0,
-        borderColor: color.goldFrame,
+        backgroundColor: tone === "accent" ? color.accentSoft : color.indigoTint,
+        borderWidth: tone === "accent" ? 1.5 : 0,
+        borderColor: color.accentFrame,
       }}
     >
-      <Text style={{ fontFamily: font.displaySemi, fontSize: size * 0.36, color: tone === "gold" ? color.goldText : color.indigo }}>
+      <Text style={{ fontFamily: font.displaySemi, fontSize: size * 0.36, color: tone === "accent" ? color.accentText : color.indigo }}>
         {initials || "?"}
       </Text>
     </View>
@@ -83,8 +83,8 @@ export function Chips<T extends string>({
             onPress={() => onChange(o.value)}
             style={[styles.chip, on && styles.chipOn]}
           >
-            {o.icon ? <Ionicons name={o.icon} size={15} color={on ? color.goldText : color.muted} /> : null}
-            <Text style={[styles.chipText, on && { color: color.goldText }]}>{o.label}</Text>
+            {o.icon ? <Ionicons name={o.icon} size={15} color={on ? color.accentText : color.muted} /> : null}
+            <Text style={[styles.chipText, on && { color: color.accentText }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -96,7 +96,7 @@ export function Empty({ icon, title, body }: { icon: keyof typeof Ionicons.glyph
   return (
     <FadeIn style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={26} color={color.gold} />
+        <Ionicons name={icon} size={26} color={color.accent} />
       </View>
       <Text variant="heading" style={{ textAlign: "center" }}>{title}</Text>
       {body ? <Text variant="caption" style={{ textAlign: "center", maxWidth: 260 }}>{body}</Text> : null}
@@ -107,7 +107,7 @@ export function Empty({ icon, title, body }: { icon: keyof typeof Ionicons.glyph
 export function Loading() {
   return (
     <View style={{ paddingVertical: 48, alignItems: "center" }}>
-      <ActivityIndicator color={color.gold} />
+      <ActivityIndicator color={color.accent} />
     </View>
   );
 }
@@ -139,9 +139,9 @@ export function SectionTitle({ title, action }: { title: string; action?: { labe
   );
 }
 
-export function Stat({ label, value, tone = "ink", icon }: { label: string; value: number | string; tone?: "ink" | "gold" | "red" | "green"; icon: keyof typeof Ionicons.glyphMap }) {
-  const fg = { ink: color.indigo, gold: color.goldText, red: color.red, green: color.green }[tone];
-  const bg = { ink: color.indigoTint, gold: color.goldSoft, red: color.redSoft, green: color.greenSoft }[tone];
+export function Stat({ label, value, tone = "ink", icon }: { label: string; value: number | string; tone?: "ink" | "accent" | "red" | "green"; icon: keyof typeof Ionicons.glyphMap }) {
+  const fg = { ink: color.indigo, accent: color.accentText, red: color.red, green: color.green }[tone];
+  const bg = { ink: color.indigoTint, accent: color.accentSoft, red: color.redSoft, green: color.greenSoft }[tone];
   return (
     <View style={styles.stat}>
       <View style={[styles.statIcon, { backgroundColor: bg }]}>
@@ -169,10 +169,10 @@ const styles = StyleSheet.create({
   segText: { fontFamily: font.bodyBold, fontSize: 13.5, color: color.muted },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: color.line, backgroundColor: color.white },
-  chipOn: { borderColor: color.goldFrame, backgroundColor: color.goldSoft },
+  chipOn: { borderColor: color.accentFrame, backgroundColor: color.accentSoft },
   chipText: { fontFamily: font.bodySemi, fontSize: 13.5, color: color.muted },
   empty: { alignItems: "center", gap: 8, paddingVertical: 40 },
-  emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: color.goldSoft, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: color.accentSoft, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   error: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: color.redSoft },
   section: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
   stat: { flex: 1, minWidth: 140, backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1, borderColor: color.line, padding: 14, gap: 4 },

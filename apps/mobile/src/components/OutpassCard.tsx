@@ -13,7 +13,7 @@ import { Text } from "../ui/Text";
 export function OutpassCard({ outpass, showStudent }: { outpass: OutpassDto; showStudent?: boolean }) {
   const status = outpassStatus(outpass);
   const type = outpassTypes.find((t) => t.value === outpass.type);
-  const accent = outpass.overdue ? color.red : status.tone === "amber" ? "#F59E0B" : status.tone === "gold" ? color.gold : undefined;
+  const accent = outpass.overdue ? color.red : status.tone === "amber" ? "#F59E0B" : status.tone === "accent" ? color.accent : undefined;
   return (
     <Card onPress={() => router.push(`/outpass/${outpass.id}`)} accent={accent} style={styles.card}>
       {showStudent ? (
@@ -28,7 +28,7 @@ export function OutpassCard({ outpass, showStudent }: { outpass: OutpassDto; sho
       ) : (
         <View style={styles.row}>
           <View style={styles.typeIcon}>
-            <Ionicons name={type?.icon ?? "navigate-outline"} size={18} color={color.indigo} />
+            <Ionicons name={type?.icon ?? "navigate-outline"} size={19} color={color.white} />
           </View>
           <View style={{ flex: 1 }}>
             <Text variant="heading" numberOfLines={1}>{outpass.destination}</Text>
@@ -47,6 +47,14 @@ export function OutpassCard({ outpass, showStudent }: { outpass: OutpassDto; sho
           <Text variant="caption" style={outpass.overdue ? { color: color.red } : null}>{when(outpass.returnBy)}</Text>
         </View>
       </View>
+      {outpass.extension?.status === "PENDING" && (outpass.status === "OUT" || outpass.status === "APPROVED") ? (
+        <View style={styles.ext}>
+          <Ionicons name="time-outline" size={14} color={color.amber} />
+          <Text variant="caption" style={{ color: color.amber, flex: 1 }} numberOfLines={1}>
+            Asking to return by {when(outpass.extension.requestedReturnBy)}
+          </Text>
+        </View>
+      ) : null}
       {showStudent ? (
         <Text variant="caption" numberOfLines={1} style={{ color: color.ink }}>
           {type?.label} · {outpass.destination} — {outpass.reason}
@@ -59,7 +67,8 @@ export function OutpassCard({ outpass, showStudent }: { outpass: OutpassDto; sho
 const styles = StyleSheet.create({
   card: { gap: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  typeIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: color.indigoTint, alignItems: "center", justifyContent: "center" },
+  typeIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.indigoDeep, alignItems: "center", justifyContent: "center" },
   times: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
   time: { flexDirection: "row", alignItems: "center", gap: 5 },
+  ext: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: color.amberSoft },
 });

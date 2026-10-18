@@ -3,6 +3,7 @@ import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, errorMessage } from "../../api/client";
 import { useSession } from "../../auth/session";
+import { useRibbon } from "../../ui/Ribbon";
 import { enqueue, flush, loadQueue, subscribe, type QueuedEvent } from "./offlineQueue";
 
 export type DeskState =
@@ -21,6 +22,7 @@ const GATE_NAME = "Main Gate";
  */
 export function useGateDesk() {
   const { token } = useSession();
+  const ribbon = useRibbon();
   const [state, setState] = useState<DeskState>({ phase: "idle" });
   const [pending, setPending] = useState<QueuedEvent[]>([]);
 
@@ -75,16 +77,23 @@ export function useGateDesk() {
       try {
         await api.recordEvent(token, input);
         setState({ phase: "done", verdict, accepted: photoMatched, queued: false });
+        const who = verdict.person?.name ?? "Visitor";
+        if (photoMatched) {
+          ribbon.show({ tone: "success", title: direction === "ENTRY" ? `${who} is in` : `${who} is out`, body: direction === "ENTRY" ? "Entry recorded." : "Exit recorded. Parents have been told.", celebrate: true });
+        } else {
+          ribbon.show({ tone: "danger", title: `${who} turned back`, body: "Logged as a photo mismatch." });
+        }
       } catch (err) {
         if (err instanceof ApiError && err.status === 0) {
           enqueue({ ...input, personName: verdict.person?.name ?? "Unknown", queuedAt: new Date().toISOString() });
           setState({ phase: "done", verdict, accepted: photoMatched, queued: true });
+          ribbon.show({ tone: "warning", title: "Saved on this phone", body: "No network. It will sync automatically." });
         } else {
           setState({ phase: "error", message: errorMessage(err) });
         }
       }
     },
-    [token, state],
+    [token, state, ribbon],
   );
 
   return {

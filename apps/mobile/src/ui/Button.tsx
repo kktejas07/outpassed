@@ -4,21 +4,22 @@ import { color, font, radius, shadow } from "../theme/tokens";
 import { PressScale } from "./motion";
 import { Text } from "./Text";
 
-type Tone = "gold" | "indigo" | "outline" | "ghost" | "danger" | "success";
+type Tone = "accent" | "indigo" | "outline" | "ghost" | "danger" | "success";
 
 const tones: Record<Tone, { bg: string; fg: string; border?: string }> = {
-  gold: { bg: color.gold, fg: color.white },
+  // Primary action: indigo, as in the design.
+  accent: { bg: color.indigo, fg: color.white },
   indigo: { bg: color.indigo, fg: color.white },
   outline: { bg: color.white, fg: color.ink, border: color.line },
   ghost: { bg: "transparent", fg: color.indigo },
   danger: { bg: color.white, fg: color.red, border: "#F3C7C7" },
-  success: { bg: color.greenBright, fg: color.white },
+  success: { bg: color.green, fg: color.white },
 };
 
 export function Button({
   label,
   onPress,
-  tone = "gold",
+  tone = "accent",
   icon,
   loading,
   disabled,
@@ -45,7 +46,7 @@ export function Button({
         styles.base,
         compact && styles.compact,
         { backgroundColor: t.bg, borderColor: t.border ?? t.bg, opacity: off ? 0.55 : 1 },
-        tone === "gold" && !off ? shadow.gold : null,
+        (tone === "accent" || tone === "indigo") && !off ? shadow.primary : null,
         style,
       ]}
     >
@@ -62,7 +63,7 @@ export function Button({
 }
 
 const styles = StyleSheet.create({
-  base: { height: 52, borderRadius: radius.md, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
+  base: { height: 54, borderRadius: radius.md, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
   compact: { height: 40, borderRadius: radius.sm, paddingHorizontal: 14 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   label: { fontFamily: font.bodyBold, fontSize: 15.5 },

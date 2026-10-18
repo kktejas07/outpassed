@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { useAction } from "../../lib/useQuery";
+import { useRibbon } from "../../ui/Ribbon";
 
 export type LeavePreset = "now" | "1h" | "evening" | "tomorrow";
 export type DurationPreset = "3h" | "6h" | "tonight" | "2d" | "4d" | "7d";
@@ -60,6 +61,7 @@ export function useNewOutpass() {
   const [leave, setLeave] = useState<LeavePreset>("now");
   const [duration, setDuration] = useState<DurationPreset>("3h");
   const [touched, setTouched] = useState(false);
+  const ribbon = useRibbon();
 
   const setType = (t: OutpassType) => {
     setTypeState(t);
@@ -92,7 +94,14 @@ export function useNewOutpass() {
     setTouched(true);
     if (!valid) return;
     const created = await action.run();
-    if (created) router.replace(`/outpass/${created.id}`);
+    if (created) {
+      router.replace(`/outpass/${created.id}`);
+      ribbon.show({
+        tone: "success",
+        title: "Request sent",
+        body: created.status === "PENDING_PARENT" ? "Your parent is asked first, then the warden." : "It's with the warden now.",
+      });
+    }
   }
 
   return {

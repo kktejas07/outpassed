@@ -15,8 +15,9 @@ let registered: string | null = null;
 
 if (native) {
   Notifications.setNotificationHandler({
+    // While the app is open the in-app ribbon shows the alert instead of the system banner.
     handleNotification: async () => ({
-      shouldShowBanner: true,
+      shouldShowBanner: false,
       shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
@@ -69,6 +70,9 @@ export function openFromData(data: Record<string, unknown> | undefined) {
   if (!data) return;
   if (typeof data.outpassId === "string") router.push(`/outpass/${data.outpassId}`);
   else if (typeof data.visitId === "string") router.push(`/visit/${data.visitId}`);
+  else if (typeof data.sosId === "string") router.push("/sos");
+  else if (typeof data.parcelId === "string") router.push("/parcels");
+  else if (typeof data.noticeId === "string") router.push("/notices");
   else router.push("/notifications");
 }
 
@@ -79,5 +83,14 @@ export function listenForTaps(): () => void {
     if (r) openFromData(r.notification.request.content.data);
   });
   const sub = Notifications.addNotificationResponseReceivedListener((r) => openFromData(r.notification.request.content.data));
+  return () => sub.remove();
+}
+
+/** Calls back when a push arrives while the app is open. */
+export function onForegroundPush(cb: (n: { title: string; body: string; data: Record<string, unknown> }) => void): () => void {
+  if (!native) return () => undefined;
+  const sub = Notifications.addNotificationReceivedListener((n) =>
+    cb({ title: n.request.content.title ?? "", body: n.request.content.body ?? "", data: (n.request.content.data ?? {}) as Record<string, unknown> }),
+  );
   return () => sub.remove();
 }

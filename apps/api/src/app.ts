@@ -11,7 +11,10 @@ import { dashboardRoutes } from "./routes/dashboard";
 import { gateRoutes } from "./routes/gate";
 import { notificationRoutes } from "./routes/notifications";
 import { outpassRoutes } from "./routes/outpass";
+import { noticeRoutes } from "./routes/notices";
+import { parcelRoutes } from "./routes/parcels";
 import { publicRoutes } from "./routes/public";
+import { sosRoutes } from "./routes/sos";
 import { visitRoutes } from "./routes/visit";
 
 /** Builds the Fastify instance. Kept separate from listen() so tests can inject. */
@@ -42,6 +45,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(notificationRoutes);
   await app.register(publicRoutes);
+  await app.register(parcelRoutes);
+  await app.register(sosRoutes);
+  await app.register(noticeRoutes);
 
   return app;
 }

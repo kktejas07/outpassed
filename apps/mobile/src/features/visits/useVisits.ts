@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useAction, useQuery } from "../../lib/useQuery";
+import { useRibbon } from "../../ui/Ribbon";
 
 export type VisitTab = "pending" | "onsite" | "all";
 
@@ -11,6 +12,7 @@ export function useVisitList(initial: VisitTab = "all") {
   const [tab, setTab] = useState<VisitTab>(initial);
   const q = useQuery((t) => api.listVisits(t, tab), [tab]);
   const decide = useAction((t, id: string, d: Decision) => api.decideVisit(t, id, d));
+  const ribbon = useRibbon();
   return {
     ...q,
     tab,
@@ -18,7 +20,10 @@ export function useVisitList(initial: VisitTab = "all") {
     visits: q.data ?? [],
     decide: async (id: string, d: Decision) => {
       const res = await decide.run(id, d);
-      if (res) void q.reload();
+      if (res) {
+        void q.reload();
+        ribbon.show(d === "APPROVE" ? { tone: "success", title: `${res.visitorName} can come in`, body: "The gate has been told." } : { tone: "info", title: `${res.visitorName} declined` });
+      }
     },
     deciding: decide.busy,
     decideError: decide.error,
@@ -50,6 +55,7 @@ export type VisitWindow = (typeof visitWindows)[number]["value"];
 export function useInviteVisitor() {
   const f = useVisitorFields();
   const [window, setWindow] = useState<VisitWindow>("2h");
+  const ribbon = useRibbon();
   const [touched, setTouched] = useState(false);
   const action = useAction(async (t) => {
     const now = new Date();
@@ -85,7 +91,10 @@ export function useInviteVisitor() {
       setTouched(true);
       if (!valid) return;
       const v = await action.run();
-      if (v) router.replace(`/visit/${v.id}`);
+      if (v) {
+        router.replace(`/visit/${v.id}`);
+        ribbon.show({ tone: "success", title: "Visitor pass ready", body: `Share it with ${v.visitorName.split(" ")[0]}. Entry code ${v.code}.`, celebrate: true });
+      }
     },
     submitting: action.busy,
     submitError: action.error,
@@ -101,6 +110,7 @@ export function useWalkIn() {
   const [host, setHost] = useState<{ id: string; name: string } | null>(null);
   const [touched, setTouched] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
+  const ribbon = useRibbon();
 
   useEffect(() => {
     if (!token) return;
@@ -137,7 +147,10 @@ export function useWalkIn() {
       setTouched(true);
       if (!valid || !host) return;
       const v = await action.run(host.id);
-      if (v) setCreated(`${v.visitorName} is waiting for ${host.name} to approve.`);
+      if (v) {
+        setCreated(`${v.visitorName} is waiting for ${host.name} to approve.`);
+        ribbon.show({ tone: "success", title: "Sent to host", body: `${host.name} will get an alert.` });
+      }
     },
     reset: () => {
       f.setVisitorName("");

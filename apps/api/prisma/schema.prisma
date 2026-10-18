@@ -91,6 +91,15 @@ model User {
   notifications   Notification[]
   pushTokens      PushToken[]
   passwordResets  PasswordReset[]
+  extensionDecisions OutpassExtension[] @relation("ExtensionDecisions")
+  parcels         Parcel[]        @relation("StudentParcels")
+  loggedParcels   Parcel[]        @relation("LoggedParcels")
+  handedParcels   Parcel[]        @relation("HandedParcels")
+  sosRaised       SosAlert[]      @relation("SosRaised")
+  sosAcknowledged SosAlert[]      @relation("SosAcknowledged")
+  sosResolved     SosAlert[]      @relation("SosResolved")
+  notices         Notice[]
+  noticeReads     NoticeRead[]
 
   @@index([role])
   @@map("users")
@@ -142,6 +151,7 @@ model Outpass {
 
   approvals  Approval[]
   gateEvents GateEvent[]
+  extensions OutpassExtension[]
 
   @@index([studentId, status])
   @@index([status, returnBy])
@@ -261,4 +271,124 @@ model PasswordReset {
 
   @@index([userId, createdAt])
   @@map("password_resets")
+}
+
+enum ExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A student's request to come back later than the approved return time.
+model OutpassExtension {
+  id                String          @id @default(uuid())
+  outpassId         String
+  outpass           Outpass         @relation(fields: [outpassId], references: [id], onDelete: Cascade)
+  previousReturnBy  DateTime
+  requestedReturnBy DateTime
+  reason            String
+  status            ExtensionStatus @default(PENDING)
+  decidedById       String?
+  decidedBy         User?           @relation("ExtensionDecisions", fields: [decidedById], references: [id])
+  decidedAt         DateTime?
+  createdAt         DateTime        @default(now())
+
+  @@index([outpassId, status])
+  @@index([status])
+  @@map("outpass_extensions")
+}
+
+enum ParcelStatus {
+  AT_GATE
+  COLLECTED
+  RETURNED
+}
+
+/// A delivery left at the gate for a student, handed over against a code.
+model Parcel {
+  id            String       @id @default(uuid())
+  studentId     String
+  student       User         @relation("StudentParcels", fields: [studentId], references: [id], onDelete: Cascade)
+  carrier       String
+  note          String?
+  /// 4-digit code the student shows to collect it.
+  code          String
+  status        ParcelStatus @default(AT_GATE)
+  loggedById    String
+  loggedBy      User         @relation("LoggedParcels", fields: [loggedById], references: [id])
+  handedById    String?
+  handedBy      User?        @relation("HandedParcels", fields: [handedById], references: [id])
+  collectedAt   DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@index([studentId, status])
+  @@index([status, createdAt])
+  @@map("parcels")
+}
+
+enum SosKind {
+  MEDICAL
+  SAFETY
+  OTHER
+}
+
+enum SosStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+/// An emergency raised from the app; wardens and guards are alerted at once.
+model SosAlert {
+  id               String    @id @default(uuid())
+  raisedById       String
+  raisedBy         User      @relation("SosRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  kind             SosKind
+  note             String?
+  status           SosStatus @default(OPEN)
+  acknowledgedById String?
+  acknowledgedBy   User?     @relation("SosAcknowledged", fields: [acknowledgedById], references: [id])
+  acknowledgedAt   DateTime?
+  resolvedById     String?
+  resolvedBy       User?     @relation("SosResolved", fields: [resolvedById], references: [id])
+  resolvedAt       DateTime?
+  resolution       String?
+  createdAt        DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([raisedById])
+  @@map("sos_alerts")
+}
+
+enum NoticeAudience {
+  STUDENTS
+  PARENTS
+  EVERYONE
+}
+
+model Notice {
+  id        String         @id @default(uuid())
+  title     String
+  body      String
+  audience  NoticeAudience @default(STUDENTS)
+  pinned    Boolean        @default(false)
+  authorId  String
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  reads NoticeRead[]
+
+  @@index([createdAt])
+  @@map("notices")
+}
+
+model NoticeRead {
+  noticeId String
+  notice   Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt   DateTime @default(now())
+
+  @@id([noticeId, userId])
+  @@map("notice_reads")
 }

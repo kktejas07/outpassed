@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { api, errorMessage } from "../../api/client";
 import { useSession } from "../../auth/session";
+import { useRibbon } from "../../ui/Ribbon";
 
 /** Two steps: ask for a code by email, then enter the code and a new password. */
 export function useForgotPassword(initialEmail = "") {
   const { adopt } = useSession();
+  const ribbon = useRibbon();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
@@ -21,6 +23,7 @@ export function useForgotPassword(initialEmail = "") {
       const res = await api.forgotPassword(email.trim());
       setInfo(res.message);
       setStep("code");
+      ribbon.show({ tone: "info", title: "Code sent", body: "Check your email for the 6-digit code." });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -36,6 +39,7 @@ export function useForgotPassword(initialEmail = "") {
     try {
       // Signs straight in; the auth layout then takes the user to their home screen.
       await adopt(await api.resetPassword({ email: email.trim(), code: code.trim(), password }));
+      ribbon.show({ tone: "success", title: "Password changed", body: "You're signed in." });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

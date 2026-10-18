@@ -18,7 +18,7 @@ export default function WalkIn() {
       <Screen title="Walk-in" eyebrow="Visitor at the gate">
         <PopIn style={styles.done}>
           <View style={styles.doneIcon}>
-            <Ionicons name="hourglass-outline" size={30} color={color.goldText} />
+            <Ionicons name="hourglass-outline" size={30} color={color.accentText} />
           </View>
           <Text variant="title">Sent to host</Text>
           <Text variant="caption" style={{ textAlign: "center" }}>{vm.created} Scan their visit from the host's pass once approved, or check Visitors.</Text>
@@ -64,6 +64,6 @@ export default function WalkIn() {
 
 const styles = StyleSheet.create({
   host: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: radius.md, backgroundColor: color.white, borderWidth: 1, borderColor: color.line },
-  done: { backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1, borderColor: color.goldLight, padding: 24, alignItems: "center", gap: 12 },
-  doneIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: color.goldSoft, alignItems: "center", justifyContent: "center" },
+  done: { backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1, borderColor: color.accentLight, padding: 24, alignItems: "center", gap: 12 },
+  doneIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: color.accentSoft, alignItems: "center", justifyContent: "center" },
 });

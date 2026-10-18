@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   createOutpassSchema,
+  extensionDecisionSchema,
+  extensionRequestSchema,
   idParamSchema,
   outpassDecisionSchema,
   outpassListQuerySchema,
@@ -57,7 +59,11 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       const role = request.user.role;
       if (role === "PARENT") where.status = "PENDING_PARENT";
       else if (role === "WARDEN" || role === "ADMIN") {
-        where.status = { in: ["PENDING_WARDEN", "PENDING_PARENT"] };
+        // New requests, plus students out who asked to come back later.
+        where.OR = [
+          { status: { in: ["PENDING_WARDEN", "PENDING_PARENT"] } },
+          { status: { in: ["APPROVED", "OUT"] }, extensions: { some: { status: "PENDING" } } },
+        ];
       } else where.status = { in: [] };
     }
 
@@ -234,6 +240,84 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     });
     if (changed.count === 0) throw new FlowError("CONFLICT", "This outpass was just updated");
     const updated = await prisma.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
+    return toOutpassDto(updated);
+  });
+
+  /** Student asks to come back later than the approved return time. */
+  app.post("/outpasses/:id/extend", async (request) => {
+    requireRole(request, "STUDENT");
+    const { id } = idParamSchema.parse(request.params);
+    const body = extensionRequestSchema.parse(request.body);
+    const current = await findVisibleOutpass(request, id);
+    if (current.status !== "OUT" && current.status !== "APPROVED") {
+      throw new FlowError("NOT_EXTENDABLE", "You can only ask for more time on an approved pass or while you're out");
+    }
+    const requested = new Date(body.requestedReturnBy);
+    if (requested <= current.returnBy) {
+      throw new HttpError(400, "INVALID_TIME", "Pick a time later than your current return time");
+    }
+    if (requested.getTime() - current.returnBy.getTime() > 7 * 24 * 3_600_000) {
+      throw new HttpError(400, "INVALID_TIME", "An extension can be at most 7 days. Request a new outpass instead.");
+    }
+    const pending = await prisma.outpassExtension.count({ where: { outpassId: id, status: "PENDING" } });
+    if (pending > 0) throw new FlowError("EXTENSION_PENDING", "You already asked for more time. Wait for the warden to reply.");
+
+    await prisma.outpassExtension.create({
+      data: { outpassId: id, previousReturnBy: current.returnBy, requestedReturnBy: requested, reason: body.reason },
+    });
+    const updated = await prisma.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
+    const name = updated.student.name;
+    notifyLater(await wardenIds(), {
+      kind: "EXTENSION_REQUESTED",
+      title: `${name} is asking to return later`,
+      body: `Wants until ${when(requested)} instead of ${when(current.returnBy)}: ${body.reason}`,
+      data: { outpassId: id },
+    });
+    notifyLater(await guardianIds(updated.studentId), {
+      kind: "EXTENSION_REQUESTED",
+      title: `${name} asked to return later`,
+      body: `New time requested: ${when(requested)}. The warden will decide.`,
+      data: { outpassId: id },
+    });
+    return toOutpassDto(updated);
+  });
+
+  app.post("/outpasses/:id/extend/decision", async (request) => {
+    requireRole(request, "WARDEN", "ADMIN");
+    const { id } = idParamSchema.parse(request.params);
+    const { decision } = extensionDecisionSchema.parse(request.body);
+    const ext = await prisma.outpassExtension.findFirst({ where: { outpassId: id, status: "PENDING" }, orderBy: { createdAt: "desc" } });
+    if (!ext) throw new FlowError("NOT_PENDING", "There's no pending request for more time");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const changed = await tx.outpassExtension.updateMany({
+        where: { id: ext.id, status: "PENDING" },
+        data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", decidedById: request.user.sub, decidedAt: new Date() },
+      });
+      if (changed.count === 0) throw new FlowError("CONFLICT", "This request was just decided");
+      if (decision === "APPROVE") {
+        // A new deadline gets its own overdue alert if missed.
+        await tx.outpass.update({ where: { id }, data: { returnBy: ext.requestedReturnBy, overdueAlertedAt: null } });
+      }
+      return tx.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
+    });
+
+    const approved = decision === "APPROVE";
+    const body = approved
+      ? `You can return by ${when(ext.requestedReturnBy)}.`
+      : `Please return by ${when(ext.previousReturnBy)} as approved.`;
+    notifyLater([updated.studentId], {
+      kind: approved ? "EXTENSION_APPROVED" : "EXTENSION_REJECTED",
+      title: approved ? "More time approved" : "Extra time not approved",
+      body,
+      data: { outpassId: id },
+    });
+    notifyLater(await guardianIds(updated.studentId), {
+      kind: approved ? "EXTENSION_APPROVED" : "EXTENSION_REJECTED",
+      title: approved ? `${updated.student.name} can return later` : `${updated.student.name}'s request for more time was declined`,
+      body: approved ? `New return time: ${when(ext.requestedReturnBy)}.` : `Return time stays ${when(ext.previousReturnBy)}.`,
+      data: { outpassId: id },
+    });
     return toOutpassDto(updated);
   });
 

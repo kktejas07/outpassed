@@ -43,7 +43,7 @@ export default function VisitorPassPage() {
   return (
     <ScrollView style={{ backgroundColor: color.ground }} contentContainerStyle={[styles.page, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 32 }]}>
       <Brand size={40} />
-      {!pass && !error ? <ActivityIndicator color={color.gold} style={{ marginTop: 40 }} /> : null}
+      {!pass && !error ? <ActivityIndicator color={color.accent} style={{ marginTop: 40 }} /> : null}
       {error ? (
         <View style={styles.note}>
           <Ionicons name="alert-circle-outline" size={26} color={color.red} />

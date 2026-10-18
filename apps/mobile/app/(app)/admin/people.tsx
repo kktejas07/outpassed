@@ -25,7 +25,7 @@ function AddStaff({ onDone }: { onDone: () => void }) {
   const f = useAddStaff(onDone);
   return (
     <PopIn>
-      <Card style={{ gap: 12, borderColor: color.goldLight }}>
+      <Card style={{ gap: 12, borderColor: color.accentLight }}>
         <Text variant="heading">Add staff account</Text>
         <Chips
           options={[
@@ -62,7 +62,6 @@ export default function People() {
   const vm = usePeople();
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <Screen
@@ -70,14 +69,9 @@ export default function People() {
       eyebrow="Accounts"
       refreshing={vm.refreshing}
       onRefresh={vm.refresh}
-      right={<Button compact tone={adding ? "outline" : "gold"} icon={adding ? "close" : "add"} label={adding ? "Close" : "Staff"} onPress={() => setAdding((a) => !a)} />}
+      right={<Button compact tone={adding ? "outline" : "accent"} icon={adding ? "close" : "add"} label={adding ? "Close" : "Staff"} onPress={() => setAdding((a) => !a)} />}
     >
-      {adding ? <AddStaff onDone={() => { setAdding(false); setNotice("Staff account created"); void vm.reload(); }} /> : null}
-      {notice ? (
-        <PopIn>
-          <View style={styles.notice}><Text variant="label" style={{ color: color.green }}>{notice}</Text></View>
-        </PopIn>
-      ) : null}
+      {adding ? <AddStaff onDone={() => { setAdding(false); void vm.reload(); }} /> : null}
       <Chips options={roleFilters.map((r) => ({ value: r.value, label: r.label }))} value={vm.role} onChange={vm.setRole} />
       {vm.error ? <ErrorNote message={vm.error} onRetry={vm.refresh} /> : null}
       {vm.loading ? <Loading /> : null}
@@ -86,16 +80,16 @@ export default function People() {
         <FadeIn key={u.id} index={i}>
           <Card>
             <View style={styles.row}>
-              <Avatar name={u.name} size={38} tone={u.role === "STUDENT" ? "gold" : "indigo"} />
+              <Avatar name={u.name} size={38} tone={u.role === "STUDENT" ? "accent" : "indigo"} />
               <View style={{ flex: 1 }}>
                 <Text variant="label">{u.name}</Text>
                 <Text variant="caption" numberOfLines={1}>{u.student?.rollNo ? `${u.student.rollNo} · ` : ""}{u.email}</Text>
               </View>
-              <Pill label={u.role.toLowerCase()} tone={u.role === "STUDENT" ? "gold" : "indigo"} />
+              <Pill label={u.role.toLowerCase()} tone={u.role === "STUDENT" ? "accent" : "indigo"} />
             </View>
             {u.role === "STUDENT" ? (
               linking === u.id ? (
-                <LinkParent student={u} onDone={() => { setLinking(null); setNotice(`Parent linked to ${u.name}`); }} />
+                <LinkParent student={u} onDone={() => { setLinking(null); }} />
               ) : (
                 <Button compact tone="ghost" label="Link a parent" style={{ alignSelf: "flex-start", marginTop: 6, paddingHorizontal: 0 }} onPress={() => setLinking(u.id)} />
               )

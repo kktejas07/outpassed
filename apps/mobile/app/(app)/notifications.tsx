@@ -14,7 +14,7 @@ const look: Record<string, { icon: keyof typeof Ionicons.glyphMap; fg: string; b
   OUTPASS_NEEDS_PARENT: { icon: "hourglass-outline", fg: color.amber, bg: color.amberSoft },
   OUTPASS_NEEDS_WARDEN: { icon: "hourglass-outline", fg: color.amber, bg: color.amberSoft },
   OUTPASS_PARENT_APPROVED: { icon: "checkmark-outline", fg: color.green, bg: color.greenSoft },
-  OUTPASS_APPROVED: { icon: "ticket-outline", fg: color.goldText, bg: color.goldSoft },
+  OUTPASS_APPROVED: { icon: "ticket-outline", fg: color.accentText, bg: color.accentSoft },
   OUTPASS_REJECTED: { icon: "close-outline", fg: color.red, bg: color.redSoft },
   STUDENT_LEFT: { icon: "arrow-up-outline", fg: color.indigo, bg: color.indigoTint },
   STUDENT_RETURNED: { icon: "arrow-down-outline", fg: color.green, bg: color.greenSoft },
@@ -40,7 +40,7 @@ export default function Inbox() {
       right={
         vm.unread ? (
           <Pressable onPress={vm.markAllRead} hitSlop={8} accessibilityRole="button">
-            <Text variant="label" style={{ color: color.indigo }}>Mark all read</Text>
+            <Text variant="label" style={{ color: color.headSub }}>Mark all read</Text>
           </Pressable>
         ) : undefined
       }
@@ -74,7 +74,7 @@ export default function Inbox() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 16, backgroundColor: color.white, borderWidth: 1, borderColor: color.line },
-  unread: { borderColor: color.goldLight, backgroundColor: color.goldSoft },
+  unread: { borderColor: color.accentLight, backgroundColor: color.accentSoft },
   icon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.gold, marginTop: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.accent, marginTop: 6 },
 });

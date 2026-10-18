@@ -28,11 +28,11 @@ export function InvitePass({
   campusAddress?: string;
 }) {
   return (
-    <View style={[styles.frame, shadow.gold]}>
+    <View style={[styles.frame, shadow.accent]}>
       <View style={styles.pass}>
         {visitorName ? <Text variant="caption" style={{ textAlign: "center" }}>Hi {visitorName.split(" ")[0]},</Text> : null}
         <Text variant="title" style={{ textAlign: "center" }}>{hostName} has invited you</Text>
-        <Text variant="caption" style={{ textAlign: "center", color: color.goldText }}>Show this QR code or the entry code to the guard at the gate</Text>
+        <Text variant="caption" style={{ textAlign: "center", color: color.accentText }}>Show this QR code or the entry code to the guard at the gate</Text>
         {qrToken ? (
           <View style={styles.qr}>
             <QrCode value={qrToken} size={188} />
@@ -63,11 +63,11 @@ export function InvitePass({
 }
 
 const styles = StyleSheet.create({
-  frame: { borderRadius: 26, padding: 3, backgroundColor: color.goldFrame, alignSelf: "stretch" },
+  frame: { borderRadius: 26, padding: 3, backgroundColor: color.accentFrame, alignSelf: "stretch" },
   pass: { backgroundColor: color.white, borderRadius: 23, paddingVertical: 22, paddingHorizontal: 18, alignItems: "center", gap: 12 },
   qr: { padding: 10, borderRadius: 16, borderWidth: 1, borderColor: color.line, backgroundColor: color.white },
   or: { flexDirection: "row", alignItems: "center", gap: 10, alignSelf: "stretch", paddingHorizontal: 40 },
   rule: { flex: 1, height: 1, backgroundColor: color.line },
-  code: { backgroundColor: color.ink, borderRadius: radius.md, paddingHorizontal: 26, paddingVertical: 10, borderWidth: 2, borderColor: color.goldFrame },
+  code: { backgroundColor: color.ink, borderRadius: radius.md, paddingHorizontal: 26, paddingVertical: 10, borderWidth: 2, borderColor: color.accentFrame },
   codeText: { fontFamily: font.display, fontSize: 36, letterSpacing: 6, color: color.white, fontVariant: ["tabular-nums"] },
 });

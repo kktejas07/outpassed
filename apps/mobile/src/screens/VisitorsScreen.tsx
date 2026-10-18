@@ -42,7 +42,7 @@ export function VisitorsScreen() {
             {v.status === "PENDING_HOST" && v.host.id === user?.id ? (
               <View style={styles.actions}>
                 <Button compact style={{ flex: 1 }} tone="danger" label="Decline" loading={vm.deciding} onPress={() => vm.decide(v.id, "REJECT")} />
-                <Button compact style={{ flex: 1 }} tone="gold" label="Let them in" loading={vm.deciding} onPress={() => vm.decide(v.id, "APPROVE")} />
+                <Button compact style={{ flex: 1 }} tone="accent" label="Let them in" loading={vm.deciding} onPress={() => vm.decide(v.id, "APPROVE")} />
               </View>
             ) : null}
           </VisitCard>

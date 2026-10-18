@@ -21,7 +21,7 @@ export function AccountScreen() {
     <Screen title="Me">
       <FadeIn>
         <Card style={styles.profile}>
-          <Avatar name={user.name} size={64} tone="gold" />
+          <Avatar name={user.name} size={64} tone="accent" />
           <View style={{ alignItems: "center", gap: 6 }}>
             <Text variant="title">{user.name}</Text>
             <Pill label={roleLabel[user.role]} tone="indigo" />

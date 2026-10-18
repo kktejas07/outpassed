@@ -20,7 +20,16 @@ export type NotificationKind =
   | "STUDENT_OVERDUE"
   | "VISITOR_AT_GATE"
   | "VISITOR_ARRIVED"
-  | "VISIT_DECIDED";
+  | "VISIT_DECIDED"
+  | "EXTENSION_REQUESTED"
+  | "EXTENSION_APPROVED"
+  | "EXTENSION_REJECTED"
+  | "PARCEL_AT_GATE"
+  | "PARCEL_COLLECTED"
+  | "SOS_RAISED"
+  | "SOS_ACKNOWLEDGED"
+  | "SOS_RESOLVED"
+  | "NOTICE_POSTED";
 
 export type NotificationInput = {
   kind: NotificationKind;
@@ -111,6 +120,10 @@ export async function guardianIds(studentId: string): Promise<string[]> {
 }
 
 export async function wardenIds(): Promise<string[]> {
-  const rows = await prisma.user.findMany({ where: { role: "WARDEN" }, select: { id: true } });
+  return idsOfRoles(["WARDEN"]);
+}
+
+export async function idsOfRoles(roles: ("STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN")[]): Promise<string[]> {
+  const rows = await prisma.user.findMany({ where: { role: { in: roles } }, select: { id: true } });
   return rows.map((r) => r.id);
 }

@@ -10,6 +10,8 @@ import { SessionProvider } from "../src/auth/session";
 import { listenForTaps } from "../src/notifications/push";
 import { color } from "../src/theme/tokens";
 import { WebFrame } from "../src/ui/WebFrame";
+import { RibbonProvider } from "../src/ui/Ribbon";
+import { AlertWatcher } from "../src/notifications/AlertWatcher";
 
 export default function RootLayout() {
   // Tapping a phone alert opens the pass or visit it's about.
@@ -22,7 +24,10 @@ export default function RootLayout() {
       <SessionProvider>
         <StatusBar style="dark" />
         <WebFrame>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }} />
+          <RibbonProvider>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }} />
+            <AlertWatcher />
+          </RibbonProvider>
         </WebFrame>
       </SessionProvider>
     </SafeAreaProvider>

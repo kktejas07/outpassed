@@ -36,7 +36,7 @@ export default function NewOutpass() {
         <Chips options={durationPresets} value={vm.duration} onChange={vm.setDuration} />
       </FadeIn>
       <FadeIn index={4}>
-        <Card style={{ paddingVertical: 6, backgroundColor: color.goldSoft, borderColor: color.goldLight }}>
+        <Card style={{ paddingVertical: 6, backgroundColor: color.accentSoft, borderColor: color.accentLight }}>
           <KeyValue label="Leave from" value={when(vm.times.leaveAt)} />
           <View style={{ borderBottomWidth: 0 }}>
             <KeyValue label="Back by" value={when(vm.times.returnBy)} />

@@ -157,7 +157,26 @@ export const outpassSchema = z.object({
     room: z.string().nullable(),
   }),
   approvals: z.array(approvalSchema),
+  /** The latest request to come back later, if any. */
+  extension: z
+    .object({
+      id: uuidSchema,
+      previousReturnBy: z.string(),
+      requestedReturnBy: z.string(),
+      reason: z.string(),
+      status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
+      decidedByName: z.string().nullable(),
+      createdAt: z.string(),
+    })
+    .nullable(),
 });
+
+export const extensionRequestSchema = z.object({
+  requestedReturnBy: isoDateSchema,
+  reason: z.string().trim().min(3).max(300),
+});
+
+export const extensionDecisionSchema = z.object({ decision: decisionSchema });
 
 export const outpassListQuerySchema = z.object({
   status: outpassStatusSchema.optional(),
@@ -325,8 +344,92 @@ export const dashboardSummarySchema = z.object({
   pendingApprovals: z.number().int(),
   visitorsOnSite: z.number().int(),
   movementsToday: z.number().int(),
+  openSos: z.number().int(),
+  parcelsWaiting: z.number().int(),
+  extensionRequests: z.number().int(),
   overdueList: z.array(outpassSchema),
 });
+
+// --- Parcels ---
+
+export const parcelStatusSchema = z.enum(["AT_GATE", "COLLECTED", "RETURNED"]);
+
+export const logParcelSchema = z.object({
+  rollNo: z.string().trim().min(1).max(40),
+  carrier: z.string().trim().min(1).max(60),
+  note: z.string().trim().max(200).optional(),
+});
+
+export const collectParcelSchema = z.object({ code: z.string().regex(/^\d{4}$/, "Enter the 4-digit code") });
+
+export const parcelSchema = z.object({
+  id: uuidSchema,
+  carrier: z.string(),
+  note: z.string().nullable(),
+  status: parcelStatusSchema,
+  /** Only the student sees the code; staff get null. */
+  code: z.string().nullable(),
+  student: z.object({ id: uuidSchema, name: z.string(), rollNo: z.string().nullable(), hostel: z.string().nullable(), room: z.string().nullable() }),
+  loggedByName: z.string(),
+  collectedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const parcelListSchema = z.object({ parcels: z.array(parcelSchema) });
+
+// --- SOS ---
+
+export const sosKindSchema = z.enum(["MEDICAL", "SAFETY", "OTHER"]);
+export const sosStatusSchema = z.enum(["OPEN", "ACKNOWLEDGED", "RESOLVED"]);
+
+export const raiseSosSchema = z.object({
+  kind: sosKindSchema,
+  note: z.string().trim().max(300).optional(),
+});
+
+export const resolveSosSchema = z.object({ resolution: z.string().trim().max(300).optional() });
+
+export const sosSchema = z.object({
+  id: uuidSchema,
+  kind: sosKindSchema,
+  note: z.string().nullable(),
+  status: sosStatusSchema,
+  raisedBy: z.object({ id: uuidSchema, name: z.string(), phone: z.string().nullable(), rollNo: z.string().nullable(), hostel: z.string().nullable(), room: z.string().nullable() }),
+  acknowledgedByName: z.string().nullable(),
+  acknowledgedAt: z.string().nullable(),
+  resolvedByName: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
+  resolution: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const sosListSchema = z.object({ alerts: z.array(sosSchema) });
+
+// --- Notices ---
+
+export const noticeAudienceSchema = z.enum(["STUDENTS", "PARENTS", "EVERYONE"]);
+
+export const createNoticeSchema = z.object({
+  title: z.string().trim().min(3).max(120),
+  body: z.string().trim().min(1).max(4000),
+  audience: noticeAudienceSchema.default("STUDENTS"),
+  pinned: z.boolean().default(false),
+});
+
+export const noticeSchema = z.object({
+  id: uuidSchema,
+  title: z.string(),
+  body: z.string(),
+  audience: noticeAudienceSchema,
+  pinned: z.boolean(),
+  authorName: z.string(),
+  read: z.boolean(),
+  /** Staff only: how many people it went to and how many have opened it. */
+  receipts: z.object({ read: z.number().int(), total: z.number().int() }).nullable(),
+  createdAt: z.string(),
+});
+
+export const noticeListSchema = z.object({ notices: z.array(noticeSchema), unread: z.number().int() });
 
 // --- Notifications ---
 
@@ -410,6 +513,17 @@ export type HostList = z.infer<typeof hostListSchema>;
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type PublicVisitPass = z.infer<typeof publicVisitPassSchema>;
+export type ExtensionRequestInput = z.infer<typeof extensionRequestSchema>;
+export type ParcelDto = z.infer<typeof parcelSchema>;
+export type ParcelList = z.infer<typeof parcelListSchema>;
+export type LogParcelInput = z.infer<typeof logParcelSchema>;
+export type SosKind = z.infer<typeof sosKindSchema>;
+export type SosDto = z.infer<typeof sosSchema>;
+export type SosList = z.infer<typeof sosListSchema>;
+export type NoticeAudience = z.infer<typeof noticeAudienceSchema>;
+export type CreateNoticeInput = z.input<typeof createNoticeSchema>;
+export type NoticeDto = z.infer<typeof noticeSchema>;
+export type NoticeList = z.infer<typeof noticeListSchema>;
 export type NotificationDto = z.infer<typeof notificationSchema>;
 export type NotificationList = z.infer<typeof notificationListSchema>;
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;

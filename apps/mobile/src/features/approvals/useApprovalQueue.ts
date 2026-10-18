@@ -21,6 +21,7 @@ export function useApprovalQueue() {
     setTab,
     isWarden,
     readyForWarden: isWarden && tab === "waiting" ? items.filter((o) => o.status === "PENDING_WARDEN") : [],
+    askingMoreTime: isWarden && tab === "waiting" ? items.filter((o) => o.extension?.status === "PENDING" && (o.status === "OUT" || o.status === "APPROVED")) : [],
     withParent: isWarden && tab === "waiting" ? items.filter((o) => o.status === "PENDING_PARENT") : [],
     items,
   };

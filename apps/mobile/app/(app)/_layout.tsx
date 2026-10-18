@@ -8,7 +8,7 @@ export default function AppLayout() {
   if (status === "loading") {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: color.white }}>
-        <ActivityIndicator color={color.gold} />
+        <ActivityIndicator color={color.accent} />
       </View>
     );
   }

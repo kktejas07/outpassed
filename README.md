@@ -119,8 +119,10 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 - Each screen gets its state and actions from a viewmodel hook in
   `src/features/*`.
 - Shared UI is in `src/ui` and `src/components`, and design tokens are in
-  `src/theme/tokens.ts`. The palette is white, gold and indigo, with Sora and
-  Manrope type.
+  `src/theme/tokens.ts`. The palette is "Indigo + Teal": a dark indigo header
+  band with soft rings, teal for actions and safe states, and borderless white
+  cards on a cool grey ground, with Sora and Manrope type. A ribbon slides in
+  after each action; big moments also drop confetti.
 
 ## API
 
@@ -158,6 +160,17 @@ on the server.
 | `POST` | `/notifications/read` | any | Mark some or all read |
 | `POST` | `/devices` · `/devices/remove` | any | Register or remove this phone for push |
 | `GET` | `/public/visit-pass/:token` | — | Visitor's pass for the shared link |
+| `POST` | `/outpasses/:id/extend` | student | Ask to return later (with a reason) |
+| `POST` | `/outpasses/:id/extend/decision` | warden, admin | Give more time or decline |
+| `POST` | `/parcels` | guard, admin | Log a parcel by roll number (student gets a 4-digit code) |
+| `GET` | `/parcels?scope=waiting\|recent` | student, staff | Your parcels, or those at the gate |
+| `POST` | `/parcels/:id/collect` | guard, admin | Hand over when the code matches |
+| `POST` | `/sos` | any | Raise an emergency alert (medical, safety, other) |
+| `GET` | `/sos` | any | Your alerts, or open and recent ones for staff |
+| `POST` | `/sos/:id/acknowledge` · `/resolve` | staff (resolve: also the raiser) | Respond to and close an alert |
+| `GET` | `/notices` | any | Notice board for your audience, with read state |
+| `POST` | `/notices` | warden, admin | Post to students, parents or everyone |
+| `POST` | `/notices/:id/read` · `DELETE /notices/:id` | any · author/admin | Mark read · remove |
 | `GET` | `/health` | — | Liveness probe |
 
 Errors are always `{ "error": { "code": "...", "message": "..." } }`.

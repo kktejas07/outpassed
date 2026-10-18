@@ -66,7 +66,7 @@ function Dot({ state }: { state: StepState }) {
 
   const map = {
     done: { bg: color.greenBright, icon: "checkmark" as const },
-    current: { bg: color.gold, icon: null },
+    current: { bg: color.accent, icon: null },
     todo: { bg: color.line, icon: null },
     failed: { bg: color.red, icon: "close" as const },
     skipped: { bg: color.faint, icon: "remove" as const },
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 12 },
   rail: { alignItems: "center", width: 22 },
   dotWrap: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
-  halo: { position: "absolute", width: 22, height: 22, borderRadius: 11, backgroundColor: color.gold },
+  halo: { position: "absolute", width: 22, height: 22, borderRadius: 11, backgroundColor: color.accent },
   dot: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   inner: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.white },
   line: { flex: 1, width: 2, minHeight: 22, backgroundColor: color.line, marginVertical: 2 },

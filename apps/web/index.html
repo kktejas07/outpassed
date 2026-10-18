@@ -11,23 +11,23 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=Sora:wght@600;700&display=swap">
 <style>
-/* Layout: white page, one indigo hero band with the live gold pass; flows shown as numbered phone strips; full screen gallery by role. */
+/* Layout: white page, one dark indigo hero band with soft rings and the live pass; teal for actions and safe states; flows as numbered phone strips; gallery by role. */
 :root {
   --bg: #FFFFFF;
-  --ground: #FAF9FE;
+  --ground: #F5F6FB;
   --surface: #FFFFFF;
-  --line: #ECEAF5;
-  --ink: #1E1B4B;
-  --muted: #6B6B85;
+  --line: #E4E6F0;
+  --ink: #12113A;
+  --muted: #5B5F7A;
   --indigo: #4338CA;
-  --indigo-tint: #F1EFFA;
+  --indigo-tint: #EEF2FF;
   --band: #1E1B4B;
   --band-ink: #FFFFFF;
-  --band-muted: #C7C4E8;
-  --gold: #C9A227;
-  --gold-light: #E9C46A;
-  --gold-text: #7A5C0A;
-  --gold-soft: #FFFBEB;
+  --band-muted: #C7D2FE;
+  --teal: #0F766E;
+  --teal-light: #14B8A6;
+  --teal-text: #0F766E;
+  --teal-soft: #F0FDFA;
   --frame: #1E1B4B;
   --green: #15803D;
   --red: #B91C1C;
@@ -39,7 +39,7 @@
   :root:not([data-theme="light"]) {
     --bg: #100F26; --ground: #15143A; --surface: #1A1946; --line: #2B2A5A; --ink: #EEEDF9; --muted: #A6A4C6;
     --indigo: #A5B4FC; --indigo-tint: #23225A; --band: #1A1946; --band-ink: #FFFFFF; --band-muted: #B9B6E0;
-    --gold: #E9C46A; --gold-light: #E9C46A; --gold-text: #F1D58A; --gold-soft: #2A2540; --frame: #050414;
+    --teal: #2DD4BF; --teal-light: #2DD4BF; --teal-text: #5EEAD4; --teal-soft: #11313A; --frame: #050414;
     --green: #4ADE80; --red: #F87171; --shadow: 0 18px 40px -18px rgba(0, 0, 0, .7);
     color-scheme: dark;
   }
@@ -47,7 +47,7 @@
 :root[data-theme="dark"] {
   --bg: #100F26; --ground: #15143A; --surface: #1A1946; --line: #2B2A5A; --ink: #EEEDF9; --muted: #A6A4C6;
   --indigo: #A5B4FC; --indigo-tint: #23225A; --band: #1A1946; --band-ink: #FFFFFF; --band-muted: #B9B6E0;
-  --gold: #E9C46A; --gold-light: #E9C46A; --gold-text: #F1D58A; --gold-soft: #2A2540; --frame: #050414;
+  --teal: #2DD4BF; --teal-light: #2DD4BF; --teal-text: #5EEAD4; --teal-soft: #11313A; --frame: #050414;
   --green: #4ADE80; --red: #F87171; --shadow: 0 18px 40px -18px rgba(0, 0, 0, .7);
   color-scheme: dark;
 }
@@ -58,7 +58,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--body); font-
 h1, h2, h3 { font-family: var(--display); line-height: 1.15; margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
 p { margin: 0; }
 a { color: inherit; }
-:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
+:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; border-radius: 6px; }
 
 .wrap { max-width: 1160px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
@@ -74,24 +74,28 @@ nav.links a { text-decoration: none; color: var(--band-muted); }
 nav.links a:hover { color: var(--band-ink); }
 
 /* Hero */
-.hero { background: var(--band); color: var(--band-ink); overflow: hidden; }
+.hero { background: var(--band); color: var(--band-ink); overflow: hidden; position: relative; }
+.hero::before { content: ""; position: absolute; width: 620px; height: 620px; border-radius: 50%; right: -180px; top: -260px; background: rgba(99,102,241,.14); pointer-events: none; }
+.hero::after { content: ""; position: absolute; width: 440px; height: 440px; border-radius: 50%; right: -90px; top: -170px; border: 1.5px dashed rgba(165,180,252,.35); pointer-events: none; }
+.hero .wrap { position: relative; z-index: 1; }
 .hero .wrap { display: grid; grid-template-columns: 1.05fr .95fr; gap: 40px; align-items: center; padding-block: 56px 0; }
 .hero-copy { display: flex; flex-direction: column; gap: 22px; padding-bottom: 64px; min-width: 0; }
-.hero .eyebrow { color: var(--gold-light); }
+.hero .eyebrow { color: var(--teal-light); }
 .hero h1 { font-size: clamp(36px, 5.4vw, 60px); }
-.hero h1 em { font-style: normal; color: var(--gold-light); }
+.hero h1 em { font-style: normal; color: var(--teal-light); }
 .hero p.lead { font-size: 18px; color: var(--band-muted); max-width: 34em; }
 .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .btn { display: inline-flex; align-items: center; gap: 8px; height: 50px; padding: 0 22px; border-radius: 14px; font-weight: 700; font-size: 15.5px; text-decoration: none; transition: transform .15s ease; }
 .btn:hover { transform: translateY(-1px); }
-.btn.gold { background: #C9A227; color: #FFFFFF; box-shadow: 0 10px 24px -10px rgba(201, 162, 39, .8); }
+.btn.gold { background: #4338CA; color: #FFFFFF; box-shadow: 0 10px 24px -10px rgba(67, 56, 202, .9); }
+.hero .btn.gold { background: #14B8A6; color: #12113A; box-shadow: 0 10px 24px -10px rgba(20, 184, 166, .8); }
 .btn.ghost { color: var(--band-ink); border: 1px solid rgba(255, 255, 255, .25); }
 .soon { font-size: 13.5px; color: var(--band-muted); }
 
 .hero-art { position: relative; height: 560px; min-width: 0; }
 .phone { position: relative; aspect-ratio: 390 / 844; max-width: 100%; border-radius: 36px; border: 7px solid var(--frame); background: var(--frame); box-shadow: var(--shadow); overflow: hidden; }
 .phone img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 29px; }
-.hero-art .phone.main { position: absolute; width: 290px; left: 50%; top: 0; transform: translateX(-60%); border-color: #0B0A1F; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6), 0 0 0 2px rgba(233,196,106,.35); }
+.hero-art .phone.main { position: absolute; width: 290px; left: 50%; top: 0; transform: translateX(-60%); border-color: #0B0A1F; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6), 0 0 0 2px rgba(20,184,166,.45); }
 .hero-art .phone.side { position: absolute; width: 220px; right: 0; top: 150px; border-color: #0B0A1F; box-shadow: 0 24px 60px -20px rgba(0,0,0,.6); }
 .hero-art .tag { position: absolute; display: flex; align-items: center; gap: 8px; background: #FFFFFF; color: #1E1B4B; font-weight: 700; font-size: 13px; padding: 9px 14px; border-radius: 999px; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); white-space: nowrap; }
 .hero-art .tag .dot { width: 8px; height: 8px; border-radius: 50%; background: #16A34A; }
@@ -128,7 +132,7 @@ section.block.alt { background: var(--ground); border-block: 1px solid var(--lin
 .step { display: flex; flex-direction: column; gap: 14px; scroll-snap-align: start; min-width: 0; }
 .step .phone { border-width: 5px; border-radius: 28px; }
 .step .phone img { border-radius: 23px; }
-.step .num { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--gold-soft); color: var(--gold-text); border: 1px solid var(--gold-light); font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; flex: none; }
+.step .num { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--teal-soft); color: var(--teal-text); border: 1px solid var(--teal-light); font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; flex: none; }
 .step .cap { display: flex; gap: 10px; align-items: flex-start; }
 .step h3 { font-size: 15.5px; letter-spacing: -0.01em; }
 .step p { font-size: 13.5px; color: var(--muted); line-height: 1.5; margin-top: 3px; }
@@ -144,13 +148,13 @@ section.block.alt { background: var(--ground); border-block: 1px solid var(--lin
 .role + .role { padding-left: 18px; border-left: 1px solid var(--line); }
 .role h3 { font-size: 19px; }
 .role ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14.5px; color: var(--muted); }
-.role li::before { content: "—"; color: var(--gold); margin-right: 6px; }
+.role li::before { content: "—"; color: var(--teal); margin-right: 6px; }
 .role .tabs-list { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--indigo); }
 
 /* Gallery */
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
 .filters button { font: inherit; font-weight: 600; font-size: 14px; height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
-.filters button[aria-pressed="true"] { border-color: var(--gold-light); background: var(--gold-soft); color: var(--gold-text); }
+.filters button[aria-pressed="true"] { border-color: var(--teal-light); background: var(--teal-soft); color: var(--teal-text); }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 26px 20px; }
 .shot { display: flex; flex-direction: column; gap: 10px; margin: 0; min-width: 0; }
 .shot .phone { border-width: 4px; border-radius: 24px; }
@@ -182,7 +186,7 @@ section.block.alt { background: var(--ground); border-block: 1px solid var(--lin
 .platform span { color: var(--muted); font-size: 14.5px; }
 .web-views { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .web-views button { font: inherit; font-weight: 600; font-size: 13.5px; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
-.web-views button[aria-pressed="true"] { border-color: var(--gold-light); background: var(--gold-soft); color: var(--gold-text); }
+.web-views button[aria-pressed="true"] { border-color: var(--teal-light); background: var(--teal-soft); color: var(--teal-text); }
 @media (max-width: 960px) { .devices { grid-template-columns: 1fr; gap: 32px; } }
 
 .closing { background: var(--band); color: var(--band-ink); }
@@ -224,7 +228,7 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#top" aria-label="Outpass home">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#4338CA"/><path d="M18 56V34a14 14 0 0 1 28 0v22" fill="none" stroke="#FFFFFF" stroke-width="6"/><rect x="27.5" y="9.5" width="9" height="9" rx="2" transform="rotate(45 32 14)" fill="#E9C46A"/></svg>
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#14B8A6"/><path d="M20 58V32a12 12 0 0 1 24 0v26" fill="none" stroke="#1E1B4B" stroke-width="6.5"/><rect x="27.5" y="16" width="9" height="9" rx="2" transform="rotate(45 32 20.5)" fill="#FFFFFF"/></svg>
       outpass
     </a>
     <nav class="links" aria-label="Sections">
@@ -271,7 +275,7 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
     <div class="wrap">
       <div class="head">
         <span class="eyebrow">How it works</span>
-        <h2>Three flows run the whole gate</h2>
+        <h2>Four flows run the whole gate</h2>
         <p>These are real screens from the app, captured in order as each flow ran end to end.</p>
       </div>
 
@@ -279,6 +283,7 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
         <button role="tab" id="tab-outpass" aria-controls="flow-outpass" aria-selected="true">Student outpass</button>
         <button role="tab" id="tab-visitor" aria-controls="flow-visitor" aria-selected="false" tabindex="-1">Visitors</button>
         <button role="tab" id="tab-campus" aria-controls="flow-campus" aria-selected="false" tabindex="-1">Live campus</button>
+        <button role="tab" id="tab-life" aria-controls="flow-life" aria-selected="false" tabindex="-1">Hostel life</button>
       </div>
 
       <div class="flow" id="flow-outpass" role="tabpanel" aria-labelledby="tab-outpass">
@@ -287,7 +292,7 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
           <div class="step"><div class="phone"><img src="screens/student-request.webp" alt="Request outpass form with Home type, destination, reason and time presets" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">1</span><div><h3>Student requests</h3><p>Type, destination, reason. Time presets instead of date pickers.</p></div></div></div>
           <div class="step"><div class="phone"><img src="screens/parent-detail.webp" alt="Parent view of the request with approve and reject buttons" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">2</span><div><h3>Parent approves</h3><p>The linked parent sees the request and decides in one tap.</p></div></div></div>
           <div class="step"><div class="phone"><img src="screens/warden-detail.webp" alt="Warden view showing parent approved and warden step waiting" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">3</span><div><h3>Warden approves</h3><p>Final say. A warden can step in for an unreachable parent, with a logged reason.</p></div></div></div>
-          <div class="step"><div class="phone"><img src="screens/student-pass.webp" alt="Gold gate pass with a live QR code" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">4</span><div><h3>Live gate pass</h3><p>A gold pass with a QR code that changes every few seconds.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/student-pass.webp" alt="Live gate pass with a QR code" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">4</span><div><h3>Live gate pass</h3><p>A live pass with a QR code that changes every few seconds.</p></div></div></div>
           <div class="step"><div class="phone"><img src="screens/guard-verdict.webp" alt="Guard sees Allow exit with the student's details and a face check" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">5</span><div><h3>Guard checks the face</h3><p>The scan only verifies. The guard confirms the face matches the ID.</p></div></div></div>
           <div class="step"><div class="phone"><img src="screens/guard-done.webp" alt="Exit recorded confirmation" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">6</span><div><h3>Exit recorded</h3><p>Saved on the device first if the network is down, then synced.</p></div></div></div>
           <div class="step"><div class="phone"><img src="screens/student-out.webp" alt="Pass while out of campus, showing return-by time" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">7</span><div><h3>Back by the deadline</h3><p>The same pass is scanned on return. Late returns are flagged.</p></div></div></div>
@@ -315,6 +320,18 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
           <div class="step"><div class="phone"><img src="screens/admin-people.webp" alt="Admin people list with staff and link parent actions" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">4</span><div><h3>People and access</h3><p>Admins add guards and wardens and link parents to students.</p></div></div></div>
         </div>
       </div>
+      <div class="flow" id="flow-life" role="tabpanel" aria-labelledby="tab-life" hidden>
+        <p class="flow-intro">The everyday things around the gate: running late, parcels, emergencies and notices. Every step sends an alert to the right phone.</p>
+        <div class="strip">
+          <div class="step"><div class="phone"><img src="screens/late-ask.webp" alt="Student asking for two more hours with a reason" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">1</span><div><h3>Running late?</h3><p>The student asks for more time with a reason. Their parent is told.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/late-warden.webp" alt="Warden sees the request for more time" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">2</span><div><h3>Warden decides</h3><p>One tap moves the return time. The overdue alert waits for the new time.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/parcel-log.webp" alt="Guard logging a Swiggy parcel by roll number" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">3</span><div><h3>Parcel at the gate</h3><p>The guard logs it by roll number. The student gets a 4-digit code.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/parcel-student.webp" alt="Student's parcel with collection code" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">4</span><div><h3>Collect with a code</h3><p>The code is checked at handover, so parcels reach the right person.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/sos-student.webp" alt="SOS screen with medical, safety and other options" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">5</span><div><h3>SOS</h3><p>Medical, safety or other. Every warden and guard is alerted at once.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/sos-banner.webp" alt="Guard screen with a red SOS banner" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">6</span><div><h3>Staff respond</h3><p>A red banner stays up until someone responds and marks it handled.</p></div></div></div>
+          <div class="step"><div class="phone"><img src="screens/notice-receipts.webp" alt="Notice board with read receipts" loading="lazy" width="585" height="1266"></div><div class="cap"><span class="num">7</span><div><h3>Notice board</h3><p>Wardens post to students, parents or both, and see who has read it.</p></div></div></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -326,10 +343,10 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
         <p>Everyone signs in to the same app and lands on the screens for their job.</p>
       </div>
       <div class="roles">
-        <div class="role"><h3>Student</h3><span class="tabs-list">Pass · History · Visitors · Me</span><ul><li>Request an outpass</li><li>Follow each approval</li><li>Show the live gate pass</li><li>Invite visitors</li></ul></div>
-        <div class="role"><h3>Parent</h3><span class="tabs-list">Approvals · History · Me</span><ul><li>Approve or reject requests</li><li>See past trips</li><li>Know when a child is out</li></ul></div>
-        <div class="role"><h3>Warden</h3><span class="tabs-list">Queue · Campus · Visitors · Me</span><ul><li>Final approval</li><li>Override with a reason</li><li>Track overdue students</li><li>Host visitors</li></ul></div>
-        <div class="role"><h3>Guard</h3><span class="tabs-list">Scan · Walk-in · Log · Me</span><ul><li>Scan QR or look up a roll number</li><li>Check the face, let in or out</li><li>Register walk-ins</li><li>Keep working offline</li></ul></div>
+        <div class="role"><h3>Student</h3><span class="tabs-list">Pass · History · Visitors · Me</span><ul><li>Request an outpass</li><li>Show the live gate pass</li><li>Ask for more time</li><li>Collect parcels with a code</li><li>Invite visitors · SOS</li></ul></div>
+        <div class="role"><h3>Parent</h3><span class="tabs-list">Approvals · History · Me</span><ul><li>Approve or reject requests</li><li>Alerts when a child leaves and returns</li><li>Notices from the hostel</li></ul></div>
+        <div class="role"><h3>Warden</h3><span class="tabs-list">Queue · Campus · Visitors · Me</span><ul><li>Final approval, or override with a reason</li><li>Give more time</li><li>Track overdue students</li><li>Post notices · respond to SOS</li></ul></div>
+        <div class="role"><h3>Guard</h3><span class="tabs-list">Scan · Parcels · Walk-in · Log</span><ul><li>Scan QR, or a visitor code or roll number</li><li>Check the face, let in or out</li><li>Log and hand over parcels</li><li>Keep working offline</li></ul></div>
         <div class="role"><h3>Admin</h3><span class="tabs-list">Campus · Queue · People · Visitors</span><ul><li>Create staff accounts</li><li>Link parents to students</li><li>Watch the whole campus</li></ul></div>
       </div>
     </div>
@@ -392,6 +409,9 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
         <h2>The details a paper register can't do</h2>
       </div>
       <div class="features">
+        <div class="feature"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><h3>Alerts on every phone</h3><p>Parents hear when their child leaves and returns. Wardens hear about new requests, overdue students and SOS.</p></div>
+        <div class="feature"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span><h3>Parcels with a code</h3><p>Deliveries are logged at the gate and handed over only when the student's code matches.</p></div>
+        <div class="feature"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg></span><h3>SOS in two taps</h3><p>Reaches every warden and guard at once with the student's room and phone, and stays open until handled.</p></div>
         <div class="feature"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-7"/></svg></span><h3>QR codes that expire</h3><p>Each code is signed and lasts 45 seconds. A forwarded screenshot is useless by the time it reaches the gate.</p></div>
         <div class="feature"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><h3>Overrides are logged</h3><p>When a warden decides before the parent, the app records who, when and why.</p></div>
         <div class="feature"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9a14 14 0 0 1 18 0M6.5 12.5a9 9 0 0 1 11 0M10 16a4 4 0 0 1 4 0"/><path d="M4 4l16 16"/></svg></span><h3>Works when Wi-Fi drops</h3><p>Exits and entries are queued on the guard's phone and sent once the connection is back, with no duplicates.</p></div>
@@ -445,26 +465,43 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
   // Screen gallery
   const screens = [
     ["login", "all", "Sign in", "Everyone"],
+    ["reset-code", "all", "Reset password", "Code by email"],
+    ["student-hub", "student", "Home", "Shortcuts and SOS"],
     ["student-home-pending", "student", "Home", "Waiting for parent"],
     ["student-request", "student", "Request outpass", "Type and time presets"],
     ["student-home-approved", "student", "Home", "Approved pass"],
     ["student-pass", "student", "Gate pass", "Live QR"],
     ["student-out", "student", "Out of campus", "Return-by time"],
+    ["late-ask", "student", "Running late", "Ask for more time"],
+    ["parcel-student", "student", "Parcels", "Collection code"],
+    ["sos-sent", "student", "SOS", "Alert active"],
+    ["notice-student", "student", "Notices", "From the warden"],
     ["student-home-active", "student", "Home", "Overdue"],
     ["parent-queue", "parent", "Approvals", "Waiting on you"],
     ["parent-detail", "parent", "Request detail", "Approve or reject"],
     ["parent-approved", "parent", "After approving", "Sent to warden"],
+    ["alerts-parent", "parent", "Alerts", "Request waiting"],
     ["warden-queue", "warden", "Queue", "Ready for you"],
     ["warden-detail", "warden", "Request detail", "Final approval"],
     ["warden-campus", "warden", "Campus now", "Live counts"],
     ["warden-visitors", "warden", "Visitors", "Expected and on site"],
+    ["alerts-warden", "warden", "Alerts", "Ready and overdue"],
+    ["late-warden", "warden", "More time", "Approve or decline"],
+    ["notice-compose", "warden", "Notice", "Post to students"],
+    ["notice-receipts", "warden", "Notice board", "Read receipts"],
+    ["sos-staff", "warden", "SOS", "Responding"],
     ["visit-invite", "warden", "Invite visitor", "Host form"],
-    ["visit-pass", "warden", "Visitor pass", "Share with visitor"],
+    ["visit-pass", "warden", "Visitor pass", "QR and entry code"],
+    ["visit-public", "all", "Visitor's link", "No app needed"],
     ["guard-scan", "guard", "Scan", "Camera or roll number"],
     ["guard-verdict", "guard", "Verdict", "Allow exit"],
     ["guard-denied", "guard", "Verdict", "Do not allow"],
     ["guard-done", "guard", "Recorded", "Exit saved"],
     ["guard-walkin", "guard", "Walk-in", "Ask host to approve"],
+    ["guard-visitor-code", "guard", "Visitor code", "Typed at the gate"],
+    ["parcel-log", "guard", "Parcels", "Log by roll number"],
+    ["parcel-handover", "guard", "Hand over", "Check the code"],
+    ["sos-banner", "guard", "SOS banner", "Until someone responds"],
     ["guard-log", "guard", "Gate log", "Recent movements"],
     ["admin-campus", "admin", "Campus", "Admin overview"],
     ["admin-people", "admin", "People", "Staff and parents"],

@@ -1,3 +1,4 @@
+import { SosBanner } from "../../../src/components/SosBanner";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useRef, useState } from "react";
@@ -5,6 +6,7 @@ import { Animated, Easing, StyleSheet, View } from "react-native";
 import { useGateDesk } from "../../../src/features/gate/useGateDesk";
 import { color, font, radius } from "../../../src/theme/tokens";
 import { Button } from "../../../src/ui/Button";
+import { Card } from "../../../src/ui/Card";
 import { Avatar, Segmented } from "../../../src/ui/bits";
 import { Field } from "../../../src/ui/Field";
 import { FadeIn, PopIn } from "../../../src/ui/motion";
@@ -33,7 +35,17 @@ export default function GuardScan() {
   const allowed = verdict?.allowed;
 
   return (
-    <Screen title="Main Gate" eyebrow="Security desk" bell>
+    <Screen
+      hero={{
+        greeting: "Security desk,",
+        title: "Main Gate",
+        chip: desk.pending.length
+          ? { label: `${desk.pending.length} waiting to sync`, tone: "warn" }
+          : { label: "On duty · online", tone: "safe" },
+      }}
+      bell
+    >
+      <SosBanner />
       {desk.pending.length > 0 ? (
         <View style={styles.queue}>
           <Ionicons name="cloud-upload-outline" size={18} color={color.amber} />
@@ -46,14 +58,16 @@ export default function GuardScan() {
 
       {scanning || s.phase === "checking" ? (
         <>
-          <Segmented
-            options={[
-              { value: "camera", label: "Scan QR" },
-              { value: "manual", label: "Code or roll no." },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
+          <Card style={{ padding: 6 }}>
+            <Segmented
+              options={[
+                { value: "camera", label: "Scan QR" },
+                { value: "manual", label: "Code or roll no." },
+              ]}
+              value={mode}
+              onChange={setMode}
+            />
+          </Card>
           {mode === "camera" ? (
             <FadeIn>
               <View style={styles.viewfinder}>
@@ -66,7 +80,7 @@ export default function GuardScan() {
                   />
                 ) : (
                   <View style={styles.noCam}>
-                    <Ionicons name="camera-outline" size={34} color={color.goldLight} />
+                    <Ionicons name="camera-outline" size={34} color={color.accentLight} />
                     <Text variant="label" style={{ color: color.white, textAlign: "center" }}>Camera access is needed to scan passes</Text>
                     <Button compact label="Allow camera" onPress={() => void requestPermission()} />
                   </View>
@@ -133,7 +147,7 @@ export default function GuardScan() {
 
           {verdict.person ? (
             <View style={styles.person}>
-              <Avatar name={verdict.person.name} size={52} tone="gold" />
+              <Avatar name={verdict.person.name} size={52} tone="accent" />
               <View style={{ flex: 1 }}>
                 <Text variant="heading">{verdict.person.name}</Text>
                 <Text variant="caption">{verdict.person.detail}</Text>
@@ -153,7 +167,7 @@ export default function GuardScan() {
               </View>
             </>
           ) : (
-            <Button style={{ alignSelf: "stretch" }} tone={s.phase === "done" ? "gold" : "outline"} icon="scan" label="Scan next" onPress={() => { setManual(""); desk.reset(); }} />
+            <Button style={{ alignSelf: "stretch" }} tone={s.phase === "done" ? "accent" : "outline"} icon="scan" label="Scan next" onPress={() => { setManual(""); desk.reset(); }} />
           )}
           {s.phase === "verdict" && allowed ? (
             <Button tone="ghost" label="Cancel" onPress={desk.reset} />
@@ -168,8 +182,8 @@ const styles = StyleSheet.create({
   viewfinder: { height: 300, borderRadius: radius.lg, overflow: "hidden", backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
   noCam: { alignItems: "center", gap: 12, padding: 24 },
   corners: { position: "absolute", width: 240, height: 240 },
-  corner: { position: "absolute", width: 34, height: 34, borderColor: color.goldLight, borderRadius: 6 },
-  scanLine: { position: "absolute", left: 10, right: 10, height: 2, backgroundColor: color.goldLight, opacity: 0.9 },
+  corner: { position: "absolute", width: 34, height: 34, borderColor: color.accentLight, borderRadius: 6 },
+  scanLine: { position: "absolute", left: 10, right: 10, height: 2, backgroundColor: color.accentLight, opacity: 0.9 },
   verdict: { backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1.5, padding: 20, alignItems: "center", gap: 12 },
   badge: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
   person: { flexDirection: "row", alignItems: "center", gap: 12, alignSelf: "stretch", padding: 12, borderRadius: radius.md, backgroundColor: color.ground },
