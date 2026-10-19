@@ -13,6 +13,10 @@ import { alertGoesToWhatsApp, linkFor, sendWhatsApp } from "./whatsapp";
 
 export type NotificationKind =
   | "OUTPASS_NEEDS_PARENT"
+  | "OUTPASS_NEEDS_FACULTY"
+  | "OUTPASS_FACULTY_APPROVED"
+  | "OUTPASS_FOR_HOD"
+  | "OUTPASS_EMERGENCY"
   | "OUTPASS_NEEDS_WARDEN"
   | "OUTPASS_PARENT_APPROVED"
   | "OUTPASS_APPROVED"
@@ -34,7 +38,16 @@ export type NotificationKind =
   | "SOS_RESOLVED"
   | "NOTICE_POSTED"
   | "ROLLCALL_ABSENT"
-  | "ROLLCALL_DONE";
+  | "ROLLCALL_DONE"
+  | "FEE_DUE"
+  | "FEE_PAID"
+  | "FEE_PROOF_REJECTED"
+  | "EVENT_PUBLISHED"
+  | "EVENT_DECIDED"
+  | "EVENT_PENDING"
+  | "MARKET_INTEREST"
+  | "MARKET_DECIDED"
+  | "MARKET_PENDING";
 
 export type NotificationInput = {
   kind: NotificationKind;
@@ -152,7 +165,7 @@ export async function wardenIds(): Promise<string[]> {
   return idsOfRoles(["WARDEN"]);
 }
 
-export async function idsOfRoles(roles: ("STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN")[]): Promise<string[]> {
+export async function idsOfRoles(roles: ("STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN" | "FACULTY")[]): Promise<string[]> {
   const rows = await prisma.user.findMany({ where: { role: { in: roles } }, select: { id: true } });
   return rows.map((r) => r.id);
 }

@@ -14,6 +14,7 @@ enum Role {
   WARDEN
   GUARD
   ADMIN
+  FACULTY
 }
 
 enum OutpassType {
@@ -21,9 +22,12 @@ enum OutpassType {
   HOME
   MEDICAL
   EMERGENCY
+  ACADEMIC
+  PERSONAL
 }
 
 enum OutpassStatus {
+  PENDING_FACULTY
   PENDING_PARENT
   PENDING_WARDEN
   APPROVED
@@ -34,6 +38,7 @@ enum OutpassStatus {
 }
 
 enum ApprovalStep {
+  FACULTY
   PARENT
   WARDEN
 }
@@ -108,6 +113,20 @@ model User {
   auditEntries    AuditLog[]
   rollCallsTaken  RollCall[]
   rollCallEntries RollCallEntry[] @relation("RollCallStudent")
+  /// Faculty: the department they teach in.
+  departmentId    String?
+  department      Department?     @relation("DepartmentFaculty", fields: [departmentId], references: [id], onDelete: SetNull)
+  headOf          Department[]    @relation("DepartmentHead")
+  facultyOutpasses Outpass[]      @relation("FacultyOutpasses")
+  fees            Fee[]           @relation("StudentFees")
+  feesCreated     Fee[]           @relation("FeesCreated")
+  feePayments     FeePayment[]    @relation("FeePaymentsReviewed")
+  eventsCreated   CampusEvent[]   @relation("EventsCreated")
+  eventsApproved  CampusEvent[]   @relation("EventsApproved")
+  eventRegistrations EventRegistration[]
+  marketItems     MarketItem[]
+  marketInterests MarketInterest[]
+  offersCreated   Offer[]
 
   @@index([role])
   @@index([phoneNormalized])
@@ -124,6 +143,8 @@ model StudentProfile {
   hostelRef   Hostel?   @relation(fields: [hostelId], references: [id], onDelete: SetNull)
   room        String?
   dateOfBirth DateTime? @db.Date
+  departmentId String?
+  department  Department? @relation("DepartmentStudents", fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([hostelId])
   @@map("student_profiles")
@@ -159,6 +180,9 @@ model Outpass {
   returnedAt  DateTime?
   /// Set once the overdue alert has gone out, so it's sent only once.
   overdueAlertedAt DateTime?
+  /// The faculty member or HOD who gave permission and approves first.
+  facultyId   String?
+  faculty     User?         @relation("FacultyOutpasses", fields: [facultyId], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -208,6 +232,11 @@ model Visit {
   code           String
   /// Unguessable id for the public pass link sent to the visitor.
   passToken      String      @unique
+  /// Optional: a student visitor's roll number or an ID number.
+  visitorIdNumber String?
+  /// Picture the guard took when the visitor arrived without an invite.
+  visitorPhoto     Bytes?
+  visitorPhotoMime String?
   /// Regular pass: weekdays it works (0 = Sunday … 6 = Saturday). Empty for a one-off visit.
   repeatDays     Int[]       @default([])
   /// Daily window for a regular pass, "HH:MM" in campus time.
@@ -240,6 +269,7 @@ model GateEvent {
   guard      User          @relation(fields: [guardId], references: [id])
   deviceTime DateTime?
   createdAt  DateTime      @default(now())
+  photo      GatePhoto?
 
   @@index([createdAt])
   @@map("gate_events")
@@ -419,6 +449,12 @@ model Institution {
   id        Int      @id @default(1)
   name      String
   address   String   @default("")
+  /// Show "Offers & opportunities" to adult students.
+  offersEnabled   Boolean @default(true)
+  /// A school: hides offers and the marketplace entirely.
+  schoolMode      Boolean @default(false)
+  /// Guards must photograph each person at exit and entry.
+  requireGatePhoto Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -545,4 +581,215 @@ model RollCallEntry {
   @@id([rollCallId, studentId])
   @@index([studentId])
   @@map("roll_call_entries")
+}
+
+/// Academic department; its HOD hears about every pass their students take.
+model Department {
+  id        String           @id @default(uuid())
+  name      String           @unique
+  code      String?
+  hodId     String?
+  hod       User?            @relation("DepartmentHead", fields: [hodId], references: [id], onDelete: SetNull)
+  faculty   User[]           @relation("DepartmentFaculty")
+  students  StudentProfile[] @relation("DepartmentStudents")
+  createdAt DateTime         @default(now())
+
+  @@map("departments")
+}
+
+/// Picture the guard took of the person at that exit or entry.
+model GatePhoto {
+  gateEventId String    @id
+  gateEvent   GateEvent @relation(fields: [gateEventId], references: [id], onDelete: Cascade)
+  data        Bytes
+  mime        String
+  createdAt   DateTime  @default(now())
+
+  @@map("gate_photos")
+}
+
+enum FeeCategory {
+  HOSTEL
+  MESS
+  BUS
+  TUITION
+  EXAM
+  FINE
+  OTHER
+}
+
+enum FeeStatus {
+  DUE
+  SUBMITTED
+  PAID
+  WAIVED
+}
+
+model Fee {
+  id           String       @id @default(uuid())
+  studentId    String
+  student      User         @relation("StudentFees", fields: [studentId], references: [id], onDelete: Cascade)
+  category     FeeCategory
+  title        String
+  /// In paise (₹1 = 100).
+  amountPaise  Int
+  dueDate      DateTime     @db.Date
+  status       FeeStatus    @default(DUE)
+  note         String?
+  createdById  String
+  createdBy    User         @relation("FeesCreated", fields: [createdById], references: [id])
+  paidAt       DateTime?
+  /// Which reminder last went out: 0 none, 1 three days before, 2 due day, 3+ weekly after.
+  remindStage  Int          @default(0)
+  lastRemindedAt DateTime?
+  createdAt    DateTime     @default(now())
+  payments     FeePayment[]
+
+  @@index([studentId, status])
+  @@index([status, dueDate])
+  @@map("fees")
+}
+
+enum PaymentMethod {
+  ONLINE
+  PROOF
+  OFFICE
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model FeePayment {
+  id               String        @id @default(uuid())
+  feeId            String
+  fee              Fee           @relation(fields: [feeId], references: [id], onDelete: Cascade)
+  method           PaymentMethod
+  amountPaise      Int
+  status           PaymentStatus @default(PENDING)
+  /// UPI / bank reference the student typed, or the gateway payment id.
+  reference        String?
+  proof            Bytes?
+  proofMime        String?
+  gatewayOrderId   String?       @unique
+  gatewayPaymentId String?
+  reviewedById     String?
+  reviewedBy       User?         @relation("FeePaymentsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  note             String?
+  createdAt        DateTime      @default(now())
+
+  @@index([feeId])
+  @@index([status])
+  @@map("fee_payments")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model CampusEvent {
+  id               String              @id @default(uuid())
+  title            String
+  description      String
+  venue            String
+  category         String              @default("General")
+  startsAt         DateTime
+  endsAt           DateTime
+  /// Seats; null means no limit.
+  capacity         Int?
+  registrationOpen Boolean             @default(true)
+  status           ReviewStatus        @default(PENDING)
+  createdById      String
+  createdBy        User                @relation("EventsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  approvedById     String?
+  approvedBy       User?               @relation("EventsApproved", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectReason     String?
+  createdAt        DateTime            @default(now())
+  registrations    EventRegistration[]
+
+  @@index([status, startsAt])
+  @@map("campus_events")
+}
+
+model EventRegistration {
+  eventId   String
+  event     CampusEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@id([eventId, userId])
+  @@index([userId])
+  @@map("event_registrations")
+}
+
+enum MarketStatus {
+  PENDING
+  ACTIVE
+  SOLD
+  REJECTED
+  REMOVED
+}
+
+/// Something a student is selling to other students.
+model MarketItem {
+  id          String           @id @default(uuid())
+  sellerId    String
+  seller      User             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  /// Whole rupees; 0 means free.
+  price       Int
+  category    String
+  condition   String           @default("Used")
+  status      MarketStatus     @default(PENDING)
+  photo       Bytes?
+  photoMime   String?
+  reports     Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  interests   MarketInterest[]
+
+  @@index([status, createdAt])
+  @@map("market_items")
+}
+
+model MarketInterest {
+  itemId    String
+  item      MarketItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User       @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([itemId, buyerId])
+  @@map("market_interests")
+}
+
+/// A sponsored listing shown the same way to every adult student (never targeted).
+model Offer {
+  id          String    @id @default(uuid())
+  category    String
+  partnerName String
+  title       String
+  body        String
+  url         String?
+  couponCode  String?
+  activeFrom  DateTime  @default(now())
+  activeTo    DateTime?
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  /// Total taps, not per person.
+  clicks      Int       @default(0)
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([active, sortOrder])
+  @@map("offers")
 }

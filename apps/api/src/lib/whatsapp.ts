@@ -122,5 +122,8 @@ export function linkFor(data?: Record<string, string>): string | null {
   if (data?.noticeId) return `${base}/notices`;
   if (data?.parcelId) return `${base}/parcels`;
   if (data?.sosId) return `${base}/sos`;
+  if (data?.feeId) return `${base}/fees`;
+  if (data?.eventId) return `${base}/events/${data.eventId}`;
+  if (data?.itemId) return `${base}/market/${data.itemId}`;
   return null;
 }

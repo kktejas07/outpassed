@@ -16,10 +16,10 @@ export const idParamSchema = z.object({ id: uuidSchema });
 
 // --- Roles ---
 
-export const roleSchema = z.enum(["STUDENT", "PARENT", "WARDEN", "GUARD", "ADMIN"]);
+export const roleSchema = z.enum(["STUDENT", "PARENT", "WARDEN", "GUARD", "ADMIN", "FACULTY"]);
 /** Roles anyone may self-register as. Staff accounts are created by an admin. */
 export const selfRegisterRoleSchema = z.enum(["STUDENT", "PARENT"]);
-export const staffRoleSchema = z.enum(["WARDEN", "GUARD", "ADMIN"]);
+export const staffRoleSchema = z.enum(["WARDEN", "GUARD", "ADMIN", "FACULTY"]);
 
 // --- Auth ---
 
@@ -34,6 +34,8 @@ export const registerSchema = z.object({
   hostel: z.string().trim().max(80).optional(),
   /** Pick from GET /hostels; takes precedence over the free-text `hostel`. */
   hostelId: uuidSchema.optional(),
+  /** Pick from GET /departments. */
+  departmentId: uuidSchema.optional(),
   room: z.string().trim().max(20).optional(),
   dateOfBirth: z.iso.date().optional(),
 });
@@ -61,6 +63,10 @@ export const userSchema = z.object({
   student: studentProfileSchema.nullable(),
   /** Signed link to the profile photo (prefix with the API address), or null. */
   photoUrl: z.string().nullable(),
+  /** Faculty and students: their department. */
+  department: z.object({ id: uuidSchema, name: z.string(), isHod: z.boolean() }).nullable().default(null),
+  /** Shown "Offers & opportunities" (adults on a college campus with offers on). */
+  showOffers: z.boolean().default(false),
 });
 
 export const authResponseSchema = z.object({
@@ -113,6 +119,8 @@ export const createStaffSchema = z.object({
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(20).optional(),
   role: staffRoleSchema,
+  /** Faculty: their department. */
+  departmentId: uuidSchema.optional(),
 });
 
 export const linkGuardianSchema = z.object({
@@ -132,9 +140,15 @@ export const guardianshipSchema = z.object({
 
 // --- Outpass ---
 
-export const outpassTypeSchema = z.enum(["LOCAL", "HOME", "MEDICAL", "EMERGENCY"]);
+/**
+ * Why a student is going out. MEDICAL covers fever, sickness and hospital
+ * visits; HOME covers family trips and vacations. EMERGENCY skips the faculty
+ * and parent steps and goes straight to the warden.
+ */
+export const outpassTypeSchema = z.enum(["LOCAL", "HOME", "MEDICAL", "EMERGENCY", "ACADEMIC", "PERSONAL"]);
 
 export const outpassStatusSchema = z.enum([
+  "PENDING_FACULTY",
   "PENDING_PARENT",
   "PENDING_WARDEN",
   "APPROVED",
@@ -153,6 +167,8 @@ export const createOutpassSchema = z
     reason: z.string().trim().min(1).max(500),
     leaveAt: isoDateSchema,
     returnBy: isoDateSchema,
+    /** The faculty member or HOD who gave permission; they approve first. */
+    facultyId: uuidSchema.optional(),
   })
   .refine((v) => new Date(v.returnBy) > new Date(v.leaveAt), {
     message: "returnBy must be after leaveAt",
@@ -166,7 +182,7 @@ export const outpassDecisionSchema = z.object({
 
 export const approvalSchema = z.object({
   id: uuidSchema,
-  step: z.enum(["PARENT", "WARDEN"]),
+  step: z.enum(["FACULTY", "PARENT", "WARDEN"]),
   decision: decisionSchema,
   approverId: uuidSchema,
   approverName: z.string(),
@@ -194,7 +210,10 @@ export const outpassSchema = z.object({
     hostel: z.string().nullable(),
     room: z.string().nullable(),
     photoUrl: z.string().nullable(),
+    department: z.string().nullable().default(null),
   }),
+  /** Who gave permission (approves first). */
+  faculty: z.object({ id: uuidSchema, name: z.string() }).nullable().default(null),
   approvals: z.array(approvalSchema),
   /** The latest request to come back later, if any. */
   extension: z
@@ -298,6 +317,8 @@ export const gateEventSchema = z.object({
   visitId: uuidSchema.nullable(),
   guardId: uuidSchema,
   note: z.string().nullable(),
+  /** Signed link to the picture taken at the gate, if any. */
+  photoUrl: z.string().nullable().default(null),
   createdAt: z.string(),
 });
 
@@ -360,6 +381,10 @@ export const walkInSchema = z.object({
   visitorType: visitorTypeSchema.default("GUEST"),
   purpose: z.string().trim().min(1).max(200),
   hostId: uuidSchema,
+  /** Optional roll number or ID card number (e.g. a student from another college). */
+  visitorIdNumber: z.string().trim().max(40).optional(),
+  /** Photo the guard took at the gate (base64 JPEG). */
+  photo: z.string().min(100).max(700_000).optional(),
   /** How long the visit may last once approved, in minutes. */
   durationMinutes: z.number().int().min(15).max(720).default(180),
 });
@@ -370,13 +395,16 @@ export const visitSchema = z.object({
   id: uuidSchema,
   visitorName: z.string(),
   visitorPhone: z.string(),
+  visitorIdNumber: z.string().nullable().default(null),
+  /** Photo the guard took at the gate (walk-ins). */
+  visitorPhotoUrl: z.string().nullable().default(null),
   visitorType: visitorTypeSchema,
   purpose: z.string(),
   status: visitStatusSchema,
   walkIn: z.boolean(),
   validFrom: z.string(),
   validTo: z.string(),
-  host: z.object({ id: uuidSchema, name: z.string() }),
+  host: z.object({ id: uuidSchema, name: z.string(), role: roleSchema.optional() }),
   checkedInAt: z.string().nullable(),
   checkedOutAt: z.string().nullable(),
   /** 6-digit code the visitor can read out at the gate instead of showing the QR. */
@@ -406,7 +434,7 @@ export const publicVisitPassSchema = z.object({
 export const visitListSchema = z.object({ visits: z.array(visitSchema) });
 
 export const hostListSchema = z.object({
-  hosts: z.array(z.object({ id: uuidSchema, name: z.string(), role: roleSchema })),
+  hosts: z.array(z.object({ id: uuidSchema, name: z.string(), role: roleSchema, detail: z.string().nullable().default(null) })),
 });
 
 // --- Dashboard ---

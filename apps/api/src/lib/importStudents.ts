@@ -24,6 +24,7 @@ const ALIASES: Record<string, string> = {
   parentemail: "parentEmail", guardianemail: "parentEmail",
   parentphone: "parentPhone", parentmobile: "parentPhone", guardianphone: "parentPhone", guardianmobile: "parentPhone",
   relation: "relation", relationship: "relation",
+  department: "department", dept: "department", branch: "department", course: "department",
 };
 
 export const REQUIRED_COLUMNS = ["name", "rollNo"] as const;
@@ -32,7 +33,7 @@ const email = z.email();
 
 type Parsed = {
   name: string; rollNo: string; email: string; phone: string; hostel: string; room: string;
-  dateOfBirth: string; parentName: string; parentEmail: string; parentPhone: string; relation: string;
+  dateOfBirth: string; parentName: string; parentEmail: string; parentPhone: string; relation: string; department: string;
 };
 
 /** Accepts 2004-08-21, 21/08/2004 or 21-08-2004. */
@@ -149,8 +150,10 @@ export async function importStudents(csv: string, opts: { dryRun: boolean; sendW
 
     const action: ImportRow["action"] = existing ? "update" : "create";
     if (!opts.dryRun) {
+      const dept = r.department ? await ensureDepartment(r.department) : null;
       const profile = {
         ...(hostel ? { hostel: hostel.name, hostelId: hostel.id } : {}),
+        ...(dept ? { departmentId: dept.id } : {}),
         ...(r.room ? { room: r.room } : {}),
         ...(dob ? { dateOfBirth: dob } : {}),
       };
@@ -236,4 +239,11 @@ function welcomeOnWhatsApp(to: string, name: string, who: "student" | "parent", 
       ? `Hi ${name.split(" ")[0]}, your college has set up *Outpass* for you: outpasses, visitors and parcels at the gate.\n\nGet the app or open ${app} and sign in with this number. We'll send you a code here.`
       : `Hello ${name}, ${child}'s college uses *Outpass*. You'll get a message here when ${child} asks to go out, leaves and returns to campus, and can approve requests from the app.\n\nSign in at ${app} with this number. We'll send you a code here.`;
   background(() => sendWhatsApp({ to, text, kind: "WELCOME", title: "Your Outpass account is ready", body: text }), "welcome whatsapp");
+}
+
+/** Finds a department by name or code (case-insensitive), or creates it. */
+async function ensureDepartment(name: string) {
+  const clean = name.trim().replace(/\s+/g, " ");
+  const found = await prisma.department.findFirst({ where: { OR: [{ name: { equals: clean, mode: "insensitive" } }, { code: { equals: clean, mode: "insensitive" } }] } });
+  return found ?? prisma.department.upsert({ where: { name: clean }, create: { name: clean }, update: {} });
 }

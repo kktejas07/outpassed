@@ -8,8 +8,9 @@ import { VISIT_QR_TTL_SECONDS } from "./visit";
 import { prisma } from "../lib/prisma";
 import { outpassInclude, toGateEventDto, type OutpassWithRelations } from "../lib/dto";
 import { guardianIds, notifyLater } from "../lib/notify";
+import { academicContacts } from "../lib/academic";
 import { clock } from "../lib/time";
-import { photoUrl } from "../lib/photo";
+import { photoUrl, visitorPhotoUrl } from "../lib/photo";
 import { verifyPassToken } from "@outpassed/shared/passToken";
 import { campusOffsetMinutes, passKeyId, passPublicKey } from "../lib/passKeys";
 import { repeatOf, studentDetail } from "../lib/passes";
@@ -64,7 +65,11 @@ function repeatRule(v: Pick<Visit, "repeatDays" | "dailyFrom" | "dailyTo">, now:
 
 function visitVerdict(visit: Visit & { host: { name: string } }, now: Date): GateVerdict {
   const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now, repeat: repeatRule(visit, now) });
-  const person = { name: visit.visitorName, detail: `Visiting ${visit.host.name} · ${visit.purpose}`, photoUrl: null };
+  const person = {
+    name: visit.visitorName,
+    detail: `Visiting ${visit.host.name} · ${visit.purpose}${visit.visitorIdNumber ? ` · ID ${visit.visitorIdNumber}` : ""}`,
+    photoUrl: visitorPhotoUrl(visit.id, !!visit.visitorPhotoMime),
+  };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "VISIT", subjectId: visit.id, person };
   }
@@ -199,7 +204,7 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
         });
       });
       const late = check.direction === "ENTRY" && now > row.returnBy;
-      notifyLater(await guardianIds(row.studentId), {
+      notifyLater([...(await guardianIds(row.studentId)), ...(await academicContacts(row.studentId, row.facultyId))], {
         kind: check.direction === "EXIT" ? "STUDENT_LEFT" : "STUDENT_RETURNED",
         title: check.direction === "EXIT" ? `${row.student.name} left campus` : `${row.student.name} is back on campus`,
         body:
@@ -258,7 +263,7 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
     const { limit } = z
       .object({ limit: z.coerce.number().int().min(1).max(200).default(30) })
       .parse(request.query);
-    const events = await prisma.gateEvent.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+    const events = await prisma.gateEvent.findMany({ orderBy: { createdAt: "desc" }, take: limit, include: { photo: { select: { mime: true } } } });
     return { events: events.map(toGateEventDto) };
   });
 }

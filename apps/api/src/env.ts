@@ -21,6 +21,13 @@ const envSchema = z.object({
    * them offline. Derived from QR_SECRET when unset; set it to rotate separately.
    */
   QR_SIGNING_KEY: z.string().optional(),
+  /**
+   * Online fee payment through Razorpay payment links. Leave unset to accept
+   * only payment proofs and office payments.
+   */
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   /** Campus time zone, for regular visitor hours and roll-call dates. */
   CAMPUS_TZ: z.string().default("Asia/Kolkata"),
   /** How long one rendered QR code is accepted at the gate. */

@@ -7,6 +7,10 @@ import { ensureHostel } from "../lib/hostels";
 import { prisma } from "../lib/prisma";
 import { issueSession } from "../lib/session";
 import { HttpError } from "../plugins/errorHandler";
+import { requireRole } from "../plugins/auth";
+import { audit } from "../lib/audit";
+import { campusSettings, forgetSettings } from "../lib/settings";
+import { z } from "zod";
 
 const tokenRequired = () => env.NODE_ENV === "production" || Boolean(env.SETUP_TOKEN);
 
@@ -63,6 +67,29 @@ export async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
     for (const name of body.hostels) await ensureHostel(name);
     return reply.status(201).send(await issueSession(app, user));
+  });
+
+  /** College switches the apps need: gate photos, offers, school mode. */
+  app.get("/settings", { onRequest: [app.authenticate] }, async () => {
+    const [settings, campus] = await Promise.all([campusSettings(), campusInfo()]);
+    return { ...settings, institutionName: campus.name };
+  });
+
+  app.patch("/admin/settings", { onRequest: [app.authenticate] }, async (request) => {
+    requireRole(request, "ADMIN");
+    const body = z
+      .object({ offersEnabled: z.boolean().optional(), schoolMode: z.boolean().optional(), requireGatePhoto: z.boolean().optional(), name: z.string().trim().min(2).max(120).optional(), address: z.string().trim().max(300).optional() })
+      .parse(request.body);
+    const current = await prisma.institution.findUnique({ where: { id: 1 } });
+    await prisma.institution.upsert({
+      where: { id: 1 },
+      create: { id: 1, name: body.name ?? env.CAMPUS_NAME, address: body.address ?? env.CAMPUS_ADDRESS, ...body },
+      update: body,
+    });
+    forgetSettings();
+    await audit(request, "SETTINGS_CHANGED", `Changed college settings: ${Object.entries(body).map(([k, v]) => `${k} → ${v}`).join(", ")}`, undefined, { before: current, after: body });
+    const [settings, campus] = await Promise.all([campusSettings(), campusInfo()]);
+    return { ...settings, institutionName: campus.name };
   });
 }
 

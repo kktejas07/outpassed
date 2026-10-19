@@ -4,12 +4,12 @@ import type { StudentProfile, User, UserPhoto } from "@prisma/client";
 import type { AuthResponse } from "@outpassed/shared";
 import { env } from "../env";
 import { HttpError } from "../plugins/errorHandler";
-import { toUserDto } from "./dto";
+import { toUserDto, userInclude } from "./dto";
 import { prisma } from "./prisma";
 
 const hash = (t: string) => createHash("sha256").update(t).digest("hex");
 
-type FullUser = User & { student?: StudentProfile | null; photo?: Pick<UserPhoto, "updatedAt"> | null };
+type FullUser = Parameters<typeof toUserDto>[0];
 
 async function newRefresh(userId: string, familyId: string) {
   const token = randomBytes(32).toString("base64url");
@@ -43,7 +43,7 @@ export async function rotateSession(app: FastifyInstance, token: string): Promis
   if (row.expiresAt < new Date()) throw expired;
   const used = await prisma.refreshToken.updateMany({ where: { id: row.id, revokedAt: null }, data: { revokedAt: new Date() } });
   if (used.count === 0) throw expired;
-  const user = await prisma.user.findUnique({ where: { id: row.userId }, include: { student: true, photo: { select: { updatedAt: true } } } });
+  const user = await prisma.user.findUnique({ where: { id: row.userId }, include: userInclude });
   if (!user) throw expired;
   return {
     accessToken: app.jwt.sign({ sub: user.id, email: user.email, role: user.role }),

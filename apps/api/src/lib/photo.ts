@@ -20,9 +20,40 @@ export function photoUrl(userId: string, updatedAt: Date | null | undefined, now
   return `/photos/${userId}?v=${v}&exp=${exp}&sig=${sig(userId, exp, v)}`;
 }
 
+/** Signed link to a gate photo (same scheme, a different key prefix). */
+export function gatePhotoUrl(eventId: string, hasPhoto: boolean, now = Date.now()): string | null {
+  if (!hasPhoto) return null;
+  const exp = Math.ceil((now / 1000 + TTL_SECONDS) / 3600) * 3600;
+  return `/gate-photos/${eventId}?exp=${exp}&sig=${sig(`gate:${eventId}`, exp, 0)}`;
+}
+
+export function visitorPhotoUrl(visitId: string, hasPhoto: boolean, now = Date.now()): string | null {
+  if (!hasPhoto) return null;
+  const exp = Math.ceil((now / 1000 + TTL_SECONDS) / 3600) * 3600;
+  return `/visitor-photos/${visitId}?exp=${exp}&sig=${sig(`visit:${visitId}`, exp, 0)}`;
+}
+
+export function verifyVisitorPhotoSig(visitId: string, exp: number, given: string, now = Date.now()): boolean {
+  return verifyPhotoSig(`visit:${visitId}`, exp, 0, given, now);
+}
+
+export function verifyGatePhotoSig(eventId: string, exp: number, given: string, now = Date.now()): boolean {
+  return verifyPhotoSig(`gate:${eventId}`, exp, 0, given, now);
+}
+
 export function verifyPhotoSig(userId: string, exp: number, v: number, given: string, now = Date.now()): boolean {
   if (!Number.isFinite(exp) || exp * 1000 < now) return false;
   const a = Buffer.from(sig(userId, exp, v));
   const b = Buffer.from(given);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Signed link for other stored images (fee proofs, marketplace photos). */
+export function mediaUrl(kind: "fee-proof" | "market", id: string, version = 0, now = Date.now()): string {
+  const exp = Math.ceil((now / 1000 + TTL_SECONDS) / 3600) * 3600;
+  return `/media/${kind}/${id}?v=${version}&exp=${exp}&sig=${sig(`${kind}:${id}`, exp, version)}`;
+}
+
+export function verifyMedia(kind: string, id: string, exp: number, version: number, given: string, now = Date.now()): boolean {
+  return verifyPhotoSig(`${kind}:${id}`, exp, version, given, now);
 }

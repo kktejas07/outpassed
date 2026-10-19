@@ -6,7 +6,7 @@ import { importStudents } from "../lib/importStudents";
 import { phoneFields } from "../lib/phone";
 import { audit } from "../lib/audit";
 import { prisma } from "../lib/prisma";
-import { toUserDto } from "../lib/dto";
+import { toUserDto, userInclude } from "../lib/dto";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
@@ -28,6 +28,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         name: body.name,
         ...phoneFields(body.phone),
         role: body.role,
+        departmentId: body.role === "FACULTY" ? body.departmentId ?? null : null,
       },
       include: { student: true },
     });
@@ -39,7 +40,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const { role } = z.object({ role: roleSchema.optional() }).parse(request.query);
     const users = await prisma.user.findMany({
       where: role ? { role } : {},
-      include: { student: true, photo: { select: { updatedAt: true } } },
+      include: userInclude,
       orderBy: { createdAt: "desc" },
       take: 200,
     });

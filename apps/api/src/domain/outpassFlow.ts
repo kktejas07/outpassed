@@ -3,17 +3,20 @@ import { describeRepeat, repeatWindowOpen } from "@outpassed/shared/passToken";
  * Outpass approval state machine. Pure functions only (no I/O) so the rules can
  * be unit-tested and reused by the gate logic.
  *
+ *   PENDING_FACULTY --faculty/HOD approves----> PENDING_PARENT (or PENDING_WARDEN)
  *   PENDING_PARENT --parent/guardian approves--> PENDING_WARDEN
  *   PENDING_WARDEN --warden approves----------> APPROVED
  *   APPROVED       --exit scan----------------> OUT
  *   OUT            --entry scan---------------> RETURNED
  *
  * Any reject moves to REJECTED. A student may cancel before leaving.
- * A warden may decide a PENDING_PARENT pass (parent unreachable); that is an
- * override and must carry a reason.
+ * A warden may decide a PENDING_FACULTY or PENDING_PARENT pass (approver
+ * unreachable); that is an override and must carry a reason. EMERGENCY
+ * passes go straight to the warden.
  */
 
 export type OutpassStatus =
+  | "PENDING_FACULTY"
   | "PENDING_PARENT"
   | "PENDING_WARDEN"
   | "APPROVED"
@@ -22,9 +25,9 @@ export type OutpassStatus =
   | "OUT"
   | "RETURNED";
 
-export type ActorRole = "STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN";
+export type ActorRole = "STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN" | "FACULTY";
 export type Decision = "APPROVE" | "REJECT";
-export type ApprovalStep = "PARENT" | "WARDEN";
+export type ApprovalStep = "FACULTY" | "PARENT" | "WARDEN";
 
 export type AdultParentMode = "approve" | "notify_only";
 
@@ -62,7 +65,18 @@ export function initialStatus(opts: {
   hasGuardian: boolean;
   adultParentMode: AdultParentMode;
   now: Date;
+  /** Set when the student named the faculty member who gave permission. */
+  facultyId?: string | null;
+  type?: string;
 }): OutpassStatus {
+  // Emergencies go straight to the warden; everyone else is told.
+  if (opts.type === "EMERGENCY") return "PENDING_WARDEN";
+  if (opts.facultyId) return "PENDING_FACULTY";
+  return statusAfterFaculty(opts);
+}
+
+/** Where a pass goes once the faculty step is done (or when there isn't one). */
+export function statusAfterFaculty(opts: { dateOfBirth: Date | null; hasGuardian: boolean; adultParentMode: AdultParentMode; now: Date }): OutpassStatus {
   if (!opts.hasGuardian) return "PENDING_WARDEN";
   const isAdult =
     opts.dateOfBirth !== null && ageOn(opts.dateOfBirth, opts.now) >= ADULT_AGE;
@@ -86,9 +100,28 @@ export function applyDecision(opts: {
   isGuardian: boolean;
   decision: Decision;
   reason?: string | null;
+  /** The acting faculty member is the one the student named. */
+  isAssignedFaculty?: boolean;
+  /** Status after the faculty step (PENDING_PARENT or PENDING_WARDEN). */
+  afterFaculty?: OutpassStatus;
 }): DecisionResult {
   const { status, actorRole, decision } = opts;
   const rejected = decision === "REJECT";
+
+  if (status === "PENDING_FACULTY") {
+    if (actorRole === "FACULTY") {
+      if (!opts.isAssignedFaculty) throw new FlowError("FORBIDDEN", "This request is waiting for another faculty member", 403);
+      return { step: "FACULTY", nextStatus: rejected ? "REJECTED" : (opts.afterFaculty ?? "PENDING_WARDEN"), override: false };
+    }
+    if (actorRole === "WARDEN" || actorRole === "ADMIN") {
+      if (!opts.reason || opts.reason.trim().length < 3) {
+        throw new FlowError("REASON_REQUIRED", "A reason is required to decide before the faculty member has responded", 400);
+      }
+      return { step: "FACULTY", nextStatus: rejected ? "REJECTED" : "APPROVED", override: true };
+    }
+    if (actorRole === "PARENT") throw new FlowError("NOT_YET", "The faculty member hasn't approved this yet", 409);
+    throw new FlowError("FORBIDDEN", "You cannot decide this request", 403);
+  }
 
   if (status === "PENDING_PARENT") {
     if (actorRole === "PARENT") {
@@ -127,7 +160,7 @@ export function applyDecision(opts: {
         override: false,
       };
     }
-    if (actorRole === "PARENT") {
+    if (actorRole === "PARENT" || actorRole === "FACULTY") {
       throw new FlowError("ALREADY_DECIDED", "You have already responded to this request");
     }
     throw new FlowError("FORBIDDEN", "You cannot decide this request", 403);
@@ -138,7 +171,7 @@ export function applyDecision(opts: {
 
 /** A student may cancel while the pass has not been used to leave. */
 export function canCancel(status: OutpassStatus): boolean {
-  return status === "PENDING_PARENT" || status === "PENDING_WARDEN" || status === "APPROVED";
+  return status === "PENDING_FACULTY" || status === "PENDING_PARENT" || status === "PENDING_WARDEN" || status === "APPROVED";
 }
 
 /** Out past the return time and not yet back. */

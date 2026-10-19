@@ -18,7 +18,7 @@ import { sendWhatsApp } from "../lib/whatsapp";
 import { env } from "../env";
 import { sendMail } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
-import { toUserDto } from "../lib/dto";
+import { toUserDto, userInclude } from "../lib/dto";
 import { HttpError } from "../plugins/errorHandler";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -61,13 +61,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
                   rollNo: body.rollNo ?? null,
                   hostel: hostel?.name ?? null,
                   hostelId: hostel?.id ?? null,
+                  departmentId: body.departmentId ?? null,
                   room: body.room ?? null,
                   dateOfBirth: body.dateOfBirth ? new Date(`${body.dateOfBirth}T00:00:00Z`) : null,
                 },
               }
             : undefined,
       },
-      include: { student: true },
+      include: userInclude,
     });
 
     return reply.status(201).send(await issueSession(app, user));
@@ -217,7 +218,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
-const withPhoto = { student: true, photo: { select: { updatedAt: true } } } as const;
+const withPhoto = userInclude;
 const RESET_TTL_MS = 15 * 60_000;
 const OTP_TTL_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 5;

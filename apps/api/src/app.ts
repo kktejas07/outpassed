@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { env } from "./env";
 import { drainNotifications } from "./lib/notify";
+import { campusSettings } from "./lib/settings";
 import { registerAuth } from "./plugins/auth";
 import { registerErrorHandler } from "./plugins/errorHandler";
 import { authRoutes } from "./routes/auth";
@@ -22,6 +23,9 @@ import { hostelRoutes } from "./routes/hostels";
 import { photoRoutes } from "./routes/photos";
 import { setupRoutes } from "./routes/setup";
 import { rollCallRoutes } from "./routes/rollcall";
+import { departmentRoutes } from "./routes/departments";
+import { feeRoutes } from "./routes/fees";
+import { campusRoutes } from "./routes/campus";
 import { reportRoutes } from "./routes/reports";
 
 /** Builds the Fastify instance. Kept separate from listen() so tests can inject. */
@@ -36,6 +40,7 @@ export async function buildApp(opts: { rateLimit?: boolean } = {}): Promise<Fast
   });
 
   registerErrorHandler(app);
+  await campusSettings();
   // Let in-flight notifications finish before the database connection closes.
   app.addHook("onClose", async () => drainNotifications());
 
@@ -84,6 +89,9 @@ export async function buildApp(opts: { rateLimit?: boolean } = {}): Promise<Fast
   await app.register(photoRoutes);
   await app.register(setupRoutes);
   await app.register(rollCallRoutes);
+  await app.register(departmentRoutes);
+  await app.register(feeRoutes);
+  await app.register(campusRoutes);
   await app.register(reportRoutes);
 
   return app;

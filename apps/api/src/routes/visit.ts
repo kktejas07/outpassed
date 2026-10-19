@@ -11,6 +11,7 @@ import {
 import { env } from "../env";
 import { FlowError } from "../domain/outpassFlow";
 import { visitToken } from "../lib/passes";
+import { decodePhoto } from "./photos";
 import { describeRepeat } from "@outpassed/shared/passToken";
 import { prisma } from "../lib/prisma";
 import { toVisitDto, visitInclude } from "../lib/dto";
@@ -39,21 +40,42 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   /** People a visitor can ask for at the gate. */
   app.get("/visits/hosts", async (request) => {
     const { q } = z.object({ q: z.string().trim().max(80).optional() }).parse(request.query);
-    const hosts = await prisma.user.findMany({
-      where: {
-        role: { in: ["WARDEN", "ADMIN", "STUDENT"] },
-        ...(q ? { name: { contains: q, mode: "insensitive" as const } } : { role: { in: ["WARDEN", "ADMIN"] } }),
-      },
-      orderBy: { name: "asc" },
-      take: 20,
-      select: { id: true, name: true, role: true },
-    });
+    // Search students and faculty by name or roll number; with no search, list staff and faculty.
+    const select = { id: true, name: true, role: true, department: { select: { name: true } }, student: { select: { rollNo: true, hostel: true } } } as const;
+    const rows = q
+      ? await prisma.user.findMany({
+          where: {
+            role: { in: ["WARDEN", "ADMIN", "STUDENT", "FACULTY"] },
+            OR: [{ name: { contains: q, mode: "insensitive" as const } }, { student: { rollNo: { equals: q, mode: "insensitive" as const } } }],
+          },
+          orderBy: { name: "asc" },
+          take: 30,
+          select,
+        })
+      : // No search yet: faculty first (most visitors come for them), then wardens and the office.
+        [
+          ...(await prisma.user.findMany({ where: { role: "FACULTY" }, orderBy: { name: "asc" }, take: 60, select })),
+          ...(await prisma.user.findMany({ where: { role: { in: ["WARDEN", "ADMIN"] } }, orderBy: { name: "asc" }, take: 20, select })),
+        ];
+    const hosts = rows.map((h) => ({
+      id: h.id,
+      name: h.name,
+      role: h.role,
+      detail:
+        h.role === "STUDENT"
+          ? [h.student?.rollNo, h.student?.hostel].filter(Boolean).join(" · ") || "Student"
+          : h.role === "FACULTY"
+            ? `Faculty${h.department ? ` · ${h.department.name}` : ""}`
+            : h.role === "WARDEN"
+              ? "Warden"
+              : "Office",
+    }));
     return { hosts };
   });
 
   /** A host pre-registers a visitor. Approved immediately: the host is the approver. */
   app.post("/visits", async (request, reply) => {
-    requireRole(request, "STUDENT", "WARDEN", "ADMIN");
+    requireRole(request, "STUDENT", "WARDEN", "ADMIN", "FACULTY");
     const body = createVisitSchema.parse(request.body);
     const row = await prisma.visit.create({
       data: {
@@ -77,9 +99,10 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** A guard registers someone who arrived without an invite; the host must approve. */
-  app.post("/visits/walk-in", async (request, reply) => {
+  app.post("/visits/walk-in", { bodyLimit: 1024 * 1024 }, async (request, reply) => {
     requireRole(request, "GUARD", "ADMIN");
     const body = walkInSchema.parse(request.body);
+    const photo = body.photo ? decodePhoto(body.photo) : null;
     const host = await prisma.user.findUnique({ where: { id: body.hostId } });
     if (!host || host.role === "GUARD" || host.role === "PARENT") {
       throw new HttpError(400, "INVALID_HOST", "Choose a valid host");
@@ -93,6 +116,8 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
         purpose: body.purpose,
         status: "PENDING_HOST",
         walkIn: true,
+        visitorIdNumber: body.visitorIdNumber ?? null,
+        ...(photo ? { visitorPhoto: photo.data, visitorPhotoMime: photo.mime } : {}),
         validFrom: now,
         validTo: new Date(now.getTime() + body.durationMinutes * 60_000),
         hostId: host.id,
@@ -105,7 +130,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     notifyLater([host.id], {
       kind: "VISITOR_AT_GATE",
       title: `${row.visitorName} is at the gate`,
-      body: `${row.purpose}. Tap to let them in or decline.`,
+      body: `${row.purpose}${row.visitorIdNumber ? ` · ID ${row.visitorIdNumber}` : ""} · phone ${row.visitorPhone}. Tap to see their photo and let them in or decline.`,
       data: { visitId: row.id },
     });
     return reply.status(201).send(toVisitDto(row));
