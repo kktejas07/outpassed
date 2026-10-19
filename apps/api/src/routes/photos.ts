@@ -8,6 +8,7 @@ import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 import { audit } from "../lib/audit";
+import { deleteImages, readImage, storeImage } from "../lib/blobStore";
 
 const MAX_BYTES = 500 * 1024;
 
@@ -23,13 +24,16 @@ export function decodePhoto(image: string): { data: Uint8Array<ArrayBuffer>; mim
 }
 
 async function savePhoto(userId: string, image: string) {
-  const { data: bytes, mime } = decodePhoto(image);
+  const img = decodePhoto(image);
+  const old = await prisma.userPhoto.findUnique({ where: { userId }, select: { storageKey: true } });
+  const { data, key } = await storeImage("profile", img);
   const row = await prisma.userPhoto.upsert({
     where: { userId },
-    create: { userId, data: bytes, mime },
-    update: { data: bytes, mime },
+    create: { userId, data, storageKey: key, mime: img.mime },
+    update: { data, storageKey: key, mime: img.mime },
     select: { updatedAt: true },
   });
+  await deleteImages([old?.storageKey]);
   return { photoUrl: photoUrl(userId, row.updatedAt) };
 }
 
@@ -60,7 +64,9 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/me/photo", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const old = await prisma.userPhoto.findUnique({ where: { userId: request.user.sub }, select: { storageKey: true } });
     await prisma.userPhoto.deleteMany({ where: { userId: request.user.sub } });
+    await deleteImages([old?.storageKey]);
     return reply.status(204).send();
   });
 
@@ -89,11 +95,12 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "FORBIDDEN", "This photo link has expired");
     }
     const photo = await prisma.userPhoto.findUnique({ where: { userId } });
-    if (!photo) throw new HttpError(404, "NOT_FOUND", "No photo");
+    const bytes = photo ? await readImage({ data: photo.data, key: photo.storageKey }) : null;
+    if (!photo || !bytes) throw new HttpError(404, "NOT_FOUND", "No photo");
     reply.header("content-type", photo.mime);
     reply.header("cache-control", "private, max-age=3600");
     reply.header("cross-origin-resource-policy", "cross-origin");
-    return reply.send(Buffer.from(photo.data));
+    return reply.send(Buffer.from(bytes));
   });
 
   /** The guard's picture of the person at an exit or entry. Sent right after the movement is recorded. */
@@ -105,8 +112,11 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
     if (!event) throw new HttpError(404, "NOT_FOUND", "Movement not found");
     // Under 18 without a parent's agreement: the movement is logged, the photo is not kept.
     if (event.outpass && !(await photosAllowed(event.outpass.studentId))) return { photoUrl: null, skipped: "NO_CONSENT" as const };
-    const { data, mime } = decodePhoto(image);
-    await prisma.gatePhoto.upsert({ where: { gateEventId: id }, create: { gateEventId: id, data, mime }, update: { data, mime } });
+    const img = decodePhoto(image);
+    const old = await prisma.gatePhoto.findUnique({ where: { gateEventId: id }, select: { storageKey: true } });
+    const { data, key } = await storeImage("gate", img);
+    await prisma.gatePhoto.upsert({ where: { gateEventId: id }, create: { gateEventId: id, data, storageKey: key, mime: img.mime }, update: { data, storageKey: key, mime: img.mime } });
+    await deleteImages([old?.storageKey]);
     return { photoUrl: gatePhotoUrl(id, true) };
   });
 
@@ -117,18 +127,20 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
     const q = signedQuery.safeParse(request.query);
     if (!q.success || !verifyGatePhotoSig(id, q.data.exp, q.data.sig)) throw new HttpError(403, "FORBIDDEN", "This photo link has expired");
     const photo = await prisma.gatePhoto.findUnique({ where: { gateEventId: id } });
-    if (!photo) throw new HttpError(404, "NOT_FOUND", "No photo");
+    const bytes = photo ? await readImage({ data: photo.data, key: photo.storageKey }) : null;
+    if (!photo || !bytes) throw new HttpError(404, "NOT_FOUND", "No photo");
     reply.header("content-type", photo.mime).header("cache-control", "private, max-age=3600").header("cross-origin-resource-policy", "cross-origin");
-    return reply.send(Buffer.from(photo.data));
+    return reply.send(Buffer.from(bytes));
   });
 
   app.get("/visitor-photos/:id", async (request, reply) => {
     const { id } = idParamSchema.parse(request.params);
     const q = signedQuery.safeParse(request.query);
     if (!q.success || !verifyVisitorPhotoSig(id, q.data.exp, q.data.sig)) throw new HttpError(403, "FORBIDDEN", "This photo link has expired");
-    const v = await prisma.visit.findUnique({ where: { id }, select: { visitorPhoto: true, visitorPhotoMime: true } });
-    if (!v?.visitorPhoto || !v.visitorPhotoMime) throw new HttpError(404, "NOT_FOUND", "No photo");
+    const v = await prisma.visit.findUnique({ where: { id }, select: { visitorPhoto: true, visitorPhotoKey: true, visitorPhotoMime: true } });
+    const bytes = v ? await readImage({ data: v.visitorPhoto, key: v.visitorPhotoKey }) : null;
+    if (!v?.visitorPhotoMime || !bytes) throw new HttpError(404, "NOT_FOUND", "No photo");
     reply.header("content-type", v.visitorPhotoMime).header("cache-control", "private, max-age=3600").header("cross-origin-resource-policy", "cross-origin");
-    return reply.send(Buffer.from(v.visitorPhoto));
+    return reply.send(Buffer.from(bytes));
   });
 }

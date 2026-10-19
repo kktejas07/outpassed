@@ -1,4 +1,5 @@
 import { ADULT_AGE, ageOn } from "../domain/outpassFlow";
+import { deleteImages } from "./blobStore";
 import { prisma } from "./prisma";
 import { cachedSettings, campusSettings } from "./settings";
 
@@ -34,9 +35,14 @@ export async function photosAllowed(userId: string): Promise<boolean> {
 
 /** Deletes every stored photo of a student: profile photo and gate photos. */
 export async function deleteStudentPhotos(studentId: string) {
+  const keys = [
+    ...(await prisma.userPhoto.findMany({ where: { userId: studentId, storageKey: { not: null } }, select: { storageKey: true } })),
+    ...(await prisma.gatePhoto.findMany({ where: { gateEvent: { outpass: { studentId } }, storageKey: { not: null } }, select: { storageKey: true } })),
+  ].map((r) => r.storageKey);
   const [profile, gate] = await Promise.all([
     prisma.userPhoto.deleteMany({ where: { userId: studentId } }),
     prisma.gatePhoto.deleteMany({ where: { gateEvent: { outpass: { studentId } } } }),
   ]);
+  await deleteImages(keys);
   return { profile: profile.count, gate: gate.count };
 }

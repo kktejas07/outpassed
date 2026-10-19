@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Linking, Platform, StyleSheet, View } from "react-native";
-import { rupees, type FeeDto } from "../api/client";
+import { photoSrc, rupees, type FeeDto } from "../api/client";
 import { useSession } from "../auth/session";
 import { useFees } from "../features/campus/useCampus";
 import { pickDocument } from "../features/photo/pickPhoto";
@@ -39,12 +39,17 @@ function FeeCard({ f, vm, showStudent, index }: { f: FeeDto; vm: ReturnType<type
   const [reference, setReference] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  // Fees that allow parts: how much to pay now, in rupees (defaults to the rest).
+  const [part, setPart] = useState("");
+  const partPaise = f.allowParts && part ? Math.round(Number(part) * 100) : undefined;
+  const partBad = partPaise !== undefined && (!(partPaise >= Math.min(10_000, f.remainingPaise)) || partPaise > f.remainingPaise);
+  const receipts = f.payments.filter((p) => p.receiptUrl);
   const s = status(f);
   const rejected = f.payments.find((p) => p.status === "REJECTED" && p.method === "PROOF");
   const open = f.status === "DUE";
 
   async function payOnline() {
-    const link = await vm.payLink(f.id);
+    const link = await vm.payLink(f.id, partPaise);
     if (!link) return;
     setPaying(true);
     if (Platform.OS === "web") globalThis.open?.(link.url, "_blank");
@@ -63,10 +68,16 @@ function FeeCard({ f, vm, showStudent, index }: { f: FeeDto; vm: ReturnType<type
             <Text variant="caption">{showStudent ? `${f.student.name} · ` : ""}{f.status === "PAID" && f.paidAt ? `Paid ${new Date(f.paidAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : `Due ${due(f.dueDate)}`}</Text>
           </View>
           <View style={{ alignItems: "flex-end", gap: 6 }}>
-            <Text style={styles.amount}>{rupees(f.amountPaise)}</Text>
+            <Text style={styles.amount}>{rupees(f.status === "PAID" ? f.amountPaise : f.remainingPaise)}</Text>
             <Pill label={s.label} tone={s.tone} />
           </View>
         </View>
+        {f.paidPaise > 0 && f.status !== "PAID" ? (
+          <View style={{ gap: 6 }}>
+            <View style={styles.track}><View style={[styles.fill, { width: `${Math.min(100, (f.paidPaise / f.amountPaise) * 100)}%` }]} /></View>
+            <Text variant="caption">{rupees(f.paidPaise)} paid of {rupees(f.amountPaise)} · {rupees(f.remainingPaise)} left</Text>
+          </View>
+        ) : null}
         {f.note ? <Text variant="caption">{f.note}</Text> : null}
         {open && rejected ? (
           <View style={styles.rejected}>
@@ -76,8 +87,18 @@ function FeeCard({ f, vm, showStudent, index }: { f: FeeDto; vm: ReturnType<type
         ) : null}
         {open ? (
           <View style={{ gap: 10 }}>
+            {f.allowParts ? (
+              <Field
+                label="Pay now (₹)"
+                value={part}
+                onChangeText={(v) => setPart(v.replace(/[^\d]/g, "").slice(0, 8))}
+                keyboardType="number-pad"
+                placeholder={`${f.remainingPaise / 100} (the full amount left)`}
+                hint={partBad ? `Between ${rupees(Math.min(10_000, f.remainingPaise))} and ${rupees(f.remainingPaise)}` : "This fee can be paid in parts. Leave empty to pay all of it."}
+              />
+            ) : null}
             <View style={styles.actions}>
-              {vm.online ? <Button compact icon="card-outline" label="Pay online" loading={vm.busy && !proofOpen} style={{ flex: 1 }} onPress={() => void payOnline()} /> : null}
+              {vm.online ? <Button compact icon="card-outline" label="Pay online" loading={vm.busy && !proofOpen} disabled={partBad} style={{ flex: 1 }} onPress={() => void payOnline()} /> : null}
               <Button compact tone="outline" icon="image-outline" label="Upload proof" style={{ flex: 1 }} onPress={() => setProofOpen((o) => !o)} />
             </View>
             {paying ? <Button compact tone="ghost" icon="refresh" label="I've paid: check now" onPress={() => void vm.check(f.id)} /> : null}
@@ -101,13 +122,33 @@ function FeeCard({ f, vm, showStudent, index }: { f: FeeDto; vm: ReturnType<type
                   icon="send"
                   label="Send to office"
                   loading={vm.busy}
-                  disabled={!image || reference.trim().length < 4}
+                  disabled={!image || reference.trim().length < 4 || partBad}
                   onPress={async () => {
-                    if (image && (await vm.sendProof(f.id, image, reference.trim()))) setProofOpen(false);
+                    if (image && (await vm.sendProof(f.id, image, reference.trim(), partPaise))) setProofOpen(false);
                   }}
                 />
               </PopIn>
             ) : null}
+          </View>
+        ) : null}
+        {receipts.length ? (
+          <View style={styles.receipts}>
+            {receipts.map((p) => (
+              <Button
+                key={p.id}
+                compact
+                tone="ghost"
+                icon="receipt-outline"
+                label={`Receipt OP-${String(p.receiptNo).padStart(6, "0")} · ${rupees(p.amountPaise)}`}
+                style={{ alignSelf: "flex-start", paddingHorizontal: 0 }}
+                onPress={() => {
+                  const url = photoSrc(p.receiptUrl);
+                  if (!url) return;
+                  if (Platform.OS === "web") globalThis.open?.(url, "_blank");
+                  else void Linking.openURL(url);
+                }}
+              />
+            ))}
           </View>
         ) : null}
       </View>
@@ -165,4 +206,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 10 },
   proof: { gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: color.ground },
   rejected: { flexDirection: "row", gap: 8, padding: 10, borderRadius: radius.sm, backgroundColor: color.redSoft },
+  track: { height: 8, borderRadius: 4, backgroundColor: color.indigoTint, overflow: "hidden" },
+  fill: { height: 8, borderRadius: 4, backgroundColor: color.indigo },
+  receipts: { borderTopWidth: 1, borderTopColor: color.line, paddingTop: 4 },
 });

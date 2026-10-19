@@ -461,6 +461,8 @@ export const dashboardSummarySchema = z.object({
   visitorsOnSite: z.number().int(),
   movementsToday: z.number().int(),
   openSos: z.number().int(),
+  /** Helpdesk requests not yet fixed. */
+  openTickets: z.number().int().default(0),
   parcelsWaiting: z.number().int(),
   extensionRequests: z.number().int(),
   overdueList: z.array(outpassSchema),

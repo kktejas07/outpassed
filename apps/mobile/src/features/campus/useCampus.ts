@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { campus, type EventDto, type FeeDto, type MarketItemDto, type OfferDto } from "../../api/client";
+import { campus, rupees, type EventDto, type FeeDto, type MarketItemDto, type OfferDto } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useAction, useQuery } from "../../lib/useQuery";
 import { useRibbon } from "../../ui/Ribbon";
@@ -30,9 +30,9 @@ export function useCampusHub() {
 export function useFees() {
   const q = useQuery((t) => campus.fees(t));
   const ribbon = useRibbon();
-  const pay = useAction((t, id: string) => campus.payOnline(t, id));
+  const pay = useAction((t, id: string, amountPaise?: number) => campus.payOnline(t, id, amountPaise));
   const check = useAction((t, id: string) => campus.checkPayment(t, id));
-  const proof = useAction((t, id: string, image: string, reference: string) => campus.uploadProof(t, id, image, reference));
+  const proof = useAction((t, id: string, image: string, reference: string, amountPaise?: number) => campus.uploadProof(t, id, image, reference, amountPaise));
   return {
     ...q,
     fees: q.data?.fees ?? ([] as FeeDto[]),
@@ -40,16 +40,23 @@ export function useFees() {
     online: !!q.data?.onlinePayment,
     actionError: pay.error ?? check.error ?? proof.error,
     busy: pay.busy || check.busy || proof.busy,
-    payLink: (id: string) => pay.run(id),
+    payLink: (id: string, amountPaise?: number) => pay.run(id, amountPaise),
     check: async (id: string) => {
       const f = await check.run(id);
       if (f) {
         void q.reload();
-        ribbon.show(f.status === "PAID" ? { tone: "success", title: "Payment received", body: `${f.title} is paid.`, celebrate: true } : { tone: "info", title: "Not received yet", body: "If you just paid, give it a minute and check again." });
+        const gotPart = f.status !== "PAID" && f.paidPaise > 0 && f.payments.some((p) => p.method === "ONLINE" && p.status === "VERIFIED");
+        ribbon.show(
+          f.status === "PAID"
+            ? { tone: "success", title: "Payment received", body: `${f.title} is paid. Your receipt is ready.`, celebrate: true }
+            : gotPart
+              ? { tone: "success", title: "Part payment received", body: `${rupees(f.remainingPaise)} left to pay.` }
+              : { tone: "info", title: "Not received yet", body: "If you just paid, give it a minute and check again." },
+        );
       }
     },
-    sendProof: async (id: string, image: string, reference: string) => {
-      const f = await proof.run(id, image, reference);
+    sendProof: async (id: string, image: string, reference: string, amountPaise?: number) => {
+      const f = await proof.run(id, image, reference, amountPaise);
       if (f) {
         void q.reload();
         ribbon.show({ tone: "success", title: "Proof sent to the office", body: "You'll get a message once they've checked it." });

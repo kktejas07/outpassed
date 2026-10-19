@@ -44,3 +44,57 @@ jobs:
         run: pnpm test
       - name: Build API
         run: pnpm build
+
+  screens:
+    # Signs in as every demo role in a real browser and opens their main screens.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: outpassed
+          POSTGRES_PASSWORD: outpassed
+          POSTGRES_DB: outpassed
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U outpassed"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://outpassed:outpassed@localhost:5432/outpassed
+      JWT_SECRET: ci-only-secret-at-least-16-chars
+      DEMO_ACCOUNTS: "true"
+      RATE_LIMIT: "false"
+      CORS_ORIGIN: "*"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm --filter @outpassed/api db:deploy
+      - name: Load demo data
+        run: pnpm --filter @outpassed/api db:seed
+      - name: Start the API
+        run: |
+          pnpm --filter @outpassed/api build
+          nohup node apps/api/dist/index.js > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/health && break; sleep 1; done
+      - name: Build the web app
+        run: cd apps/mobile && EXPO_PUBLIC_API_URL=http://localhost:3000 CI=1 npx expo export -p web --output-dir ../../dist-web
+      - name: Serve the site
+        run: nohup node e2e/serve.mjs dist-web 8082 > web.log 2>&1 &
+      - run: npx playwright install --with-deps chromium
+      - name: Screen checks
+        run: WEB_URL=http://localhost:8082 node e2e/smoke.mjs
+      - name: Keep screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: |
+            e2e-shots
+            api.log

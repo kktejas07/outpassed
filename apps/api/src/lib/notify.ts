@@ -46,6 +46,8 @@ export type NotificationKind =
   | "OCCASION_LIVE"
   | "CONSENT_NEEDED"
   | "CONSENT_CHANGED"
+  | "TICKET_NEW"
+  | "TICKET_UPDATE"
   | "EVENT_DECIDED"
   | "EVENT_PENDING"
   | "MARKET_INTEREST"

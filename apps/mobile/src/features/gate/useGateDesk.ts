@@ -3,6 +3,7 @@ import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, campus, errorMessage } from "../../api/client";
 import { useSession } from "../../auth/session";
+import { addPendingPhoto, pendingPhotos, removePendingPhoto } from "./photoQueue";
 import { useRibbon } from "../../ui/Ribbon";
 import { offlineVerdict } from "@outpassed/shared/passToken";
 import { enqueue, flush, loadQueue, subscribe, type QueuedEvent } from "./offlineQueue";
@@ -18,21 +19,15 @@ export type DeskState =
 
 const GATE_NAME = "Main Gate";
 
-/**
- * Gate photos waiting to upload (e.g. the movement was saved offline). Kept in
- * memory while the app is open; photos are too large for the phone's
- * secure storage, so a restart before syncing loses them.
- */
-const pendingPhotos: { eventId: string; image: string }[] = [];
-
+/** Uploads gate photos saved on the phone; they survive the app being closed. */
 async function uploadPhotos(token: string) {
-  for (const p of [...pendingPhotos]) {
+  for (const p of await pendingPhotos()) {
     try {
       await campus.gatePhoto(token, p.eventId, p.image);
-      pendingPhotos.splice(pendingPhotos.indexOf(p), 1);
+      removePendingPhoto(p.eventId);
     } catch (err) {
-      // 404: the movement itself hasn't synced yet; try again next round.
-      if (!(err instanceof ApiError) || (err.status !== 0 && err.status !== 404)) pendingPhotos.splice(pendingPhotos.indexOf(p), 1);
+      // Offline (0) or the movement itself hasn't synced yet (404): try again next round.
+      if (!(err instanceof ApiError) || (err.status !== 0 && err.status !== 404)) removePendingPhoto(p.eventId);
     }
   }
 }
@@ -57,12 +52,14 @@ export function useGateDesk() {
     if (token) void refreshGateKey(token).catch(() => undefined);
   }, [token]);
 
-  // Retry queued movements (then their photos) every 15 s.
+  // Retry queued movements (then their photos) every 15 s, and once on opening
+  // the desk so photos left from before the app was closed go up straight away.
   useEffect(() => {
     if (!token) return;
+    void uploadPhotos(token);
     const t = setInterval(() => {
       if (pending.length) void flush(token).then(() => uploadPhotos(token));
-      else if (pendingPhotos.length) void uploadPhotos(token);
+      else void uploadPhotos(token);
     }, 15000);
     return () => clearInterval(t);
   }, [token, pending.length]);
@@ -121,7 +118,7 @@ export function useGateDesk() {
         deviceTime: new Date().toISOString(),
         ...(photoMatched ? (photo ? {} : { note: "No photo taken at the gate" }) : { note: "Photo did not match — turned back" }),
       };
-      if (photo) pendingPhotos.push({ eventId: input.eventId, image: photo });
+      if (photo) await addPendingPhoto({ eventId: input.eventId, image: photo });
       setState({ phase: "saving", verdict });
       if (photoMatched) void recordLocalMove(verdict.subjectId, direction);
       try {

@@ -64,7 +64,7 @@ export default function StudentHome() {
                 { key: "visitor", label: "Invite visitor", icon: "person-add-outline", onPress: () => router.push("/visit/new") },
                 { key: "parcels", label: "Parcels", icon: "cube-outline", badge: vm.parcelsWaiting, onPress: () => router.push("/parcels") },
                 { key: "notices", label: "Notices", icon: "megaphone-outline", badge: vm.unreadNotices, onPress: () => router.push("/notices") },
-                { key: "history", label: "History", icon: "time-outline", onPress: () => router.push("/student/history") },
+                { key: "helpdesk", label: "Helpdesk", icon: "construct-outline", onPress: () => router.push("/helpdesk") },
                 { key: "sos", label: "SOS", icon: "alert-circle", tone: "danger", onPress: () => router.push("/sos") },
               ]}
             />

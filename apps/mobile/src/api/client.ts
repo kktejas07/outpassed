@@ -273,12 +273,30 @@ export type AuditEntry = { id: string; actorName: string; actorRole: string; act
 
 export type FacultyOption = { id: string; name: string; department: string | null; isHod: boolean; mine: boolean };
 export type Department = { id: string; name: string; code: string | null; hod: { id: string; name: string } | null; faculty: number; students: number };
-export type FeePaymentDto = { id: string; method: "ONLINE" | "PROOF" | "OFFICE"; status: "PENDING" | "VERIFIED" | "REJECTED"; amountPaise: number; reference: string | null; note: string | null; createdAt: string; proofUrl: string | null };
+export type FeePaymentDto = {
+  id: string;
+  method: "ONLINE" | "PROOF" | "OFFICE";
+  status: "PENDING" | "VERIFIED" | "REJECTED";
+  amountPaise: number;
+  reference: string | null;
+  note: string | null;
+  createdAt: string;
+  proofUrl: string | null;
+  /** Set once the payment is accepted. */
+  receiptNo: number | null;
+  /** Signed link to the PDF receipt (prefix with the API address). */
+  receiptUrl: string | null;
+};
 export type FeeDto = {
   id: string;
   category: "HOSTEL" | "MESS" | "BUS" | "TUITION" | "EXAM" | "FINE" | "OTHER";
   title: string;
   amountPaise: number;
+  /** Accepted so far; less than amountPaise after a part-payment. */
+  paidPaise: number;
+  remainingPaise: number;
+  /** The office lets this fee be paid in parts. */
+  allowParts: boolean;
   dueDate: string;
   status: "DUE" | "SUBMITTED" | "PAID" | "WAIVED";
   overdue: boolean;
@@ -333,6 +351,34 @@ export type OfferDto = {
   showAsBanner?: boolean;
   occasionId?: string | null;
 };
+export type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
+export type TicketDto = {
+  id: string;
+  number: number;
+  category: string;
+  title: string;
+  details: string;
+  location: string | null;
+  status: TicketStatus;
+  photoUrl: string | null;
+  student: { id: string; name: string; rollNo: string | null; room: string | null };
+  hostel: { id: string; name: string } | null;
+  assignedTo: { id: string; name: string } | null;
+  updates: number;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+};
+export type TicketDetail = TicketDto & {
+  canReopen: boolean;
+  history: { id: string; body: string; status: TicketStatus | null; at: string; author: { id: string; name: string; role: string } }[];
+};
+export type OfferReport = {
+  month: string;
+  daysInMonth: number;
+  total: number;
+  offers: { id: string; title: string; partnerName: string; category: string; active: boolean; taps: number; days: Record<string, number> }[];
+};
 export type OccasionDto = { id: string; name: string; tagline: string; theme: string; icon: string; startsAt: string; endsAt: string; active: boolean; live: boolean };
 export type BannerDto = {
   id: string;
@@ -361,12 +407,13 @@ export const campus = {
   setHod: (token: string, id: string, hodId: string | null) => request<Department>(`/admin/departments/${id}`, { method: "PATCH", token, body: { hodId } }),
 
   fees: (token: string) => request<{ fees: FeeDto[]; totals: { duePaise: number; overdue: number; open: number }; onlinePayment: boolean }>("/fees", { token }),
-  payOnline: (token: string, id: string) => request<{ url: string }>(`/fees/${id}/pay`, { method: "POST", token }),
+  payOnline: (token: string, id: string, amountPaise?: number) => request<{ url: string }>(`/fees/${id}/pay`, { method: "POST", token, body: amountPaise ? { amountPaise } : {} }),
   checkPayment: (token: string, id: string) => request<FeeDto>(`/fees/${id}/check`, { method: "POST", token }),
-  uploadProof: (token: string, id: string, image: string, reference: string) => request<FeeDto>(`/fees/${id}/proof`, { method: "POST", token, body: { image, reference } }),
+  uploadProof: (token: string, id: string, image: string, reference: string, amountPaise?: number) =>
+    request<FeeDto>(`/fees/${id}/proof`, { method: "POST", token, body: { image, reference, ...(amountPaise ? { amountPaise } : {}) } }),
   adminFees: (token: string, status?: string, q?: string) =>
     request<{ fees: FeeDto[]; summary: { outstandingPaise: number; outstanding: number; collectedPaise: number; paid: number; proofsToReview: number } }>(`/admin/fees${qs({ status, q })}`, { token }),
-  assignFee: (token: string, input: { category: FeeDto["category"]; title: string; amountPaise: number; dueDate: string; note?: string; target: { hostelId?: string; departmentId?: string; allStudents?: boolean; studentIds?: string[] } }) =>
+  assignFee: (token: string, input: { category: FeeDto["category"]; title: string; amountPaise: number; dueDate: string; note?: string; allowParts?: boolean; target: { hostelId?: string; departmentId?: string; allStudents?: boolean; studentIds?: string[] } }) =>
     request<{ created: number }>("/admin/fees", { method: "POST", token, body: input }),
   reviewProof: (token: string, paymentId: string, decision: "APPROVE" | "REJECT", note?: string) =>
     request<FeeDto>(`/admin/fee-payments/${paymentId}/review`, { method: "POST", token, body: { decision, note } }),
@@ -410,6 +457,13 @@ export const campus = {
   consent: (token: string) => request<{ version: string; retentionDays: number; children: ConsentRow[] }>("/consent", { token }),
   giveConsent: (token: string, studentId: string) => request<{ ok: true }>(`/consent/${studentId}`, { method: "POST", token, body: { agree: true } }),
   withdrawConsent: (token: string, studentId: string) => request<{ ok: true; removed: { profile: number; gate: number } }>(`/consent/${studentId}`, { method: "DELETE", token }),
+
+  tickets: (token: string, status: "ACTIVE" | "ALL" | TicketStatus = "ACTIVE") =>
+    request<{ tickets: TicketDto[]; counts: Record<TicketStatus, number>; categories: string[] }>(`/tickets${qs({ status })}`, { token }),
+  ticket: (token: string, id: string) => request<TicketDetail>(`/tickets/${id}`, { token }),
+  raiseTicket: (token: string, input: { category: string; title: string; details: string; location?: string; photo?: string }) => request<TicketDto>("/tickets", { method: "POST", token, body: input }),
+  updateTicket: (token: string, id: string, input: { body?: string; status?: TicketStatus }) => request<TicketDto>(`/tickets/${id}/updates`, { method: "POST", token, body: input }),
+  offerReport: (token: string, month?: string) => request<OfferReport>(`/admin/offers/report${qs({ month })}`, { token }),
 
   gatePhoto: (token: string, eventId: string, image: string) => request<{ photoUrl: string | null; skipped?: "NO_CONSENT" }>(`/gate/events/${eventId}/photo`, { method: "PUT", token, body: { image } }),
 };
