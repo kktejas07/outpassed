@@ -49,6 +49,8 @@ function AssignFee({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const opts = [
     { value: "all", label: "All students" },
+    { value: "r:HOSTELLER", label: "All hostellers" },
+    { value: "r:DAY_SCHOLAR", label: "All day scholars" },
     ...(targets.data?.hostels ?? []).map((h) => ({ value: `h:${h.id}`, label: h.name })),
     ...(targets.data?.departments ?? []).map((d) => ({ value: `d:${d.id}`, label: d.code ?? d.name })),
   ];
@@ -60,7 +62,11 @@ function AssignFee({ onDone }: { onDone: () => void }) {
     setError(null);
     try {
       const date = new Date(Date.now() + Number(due) * 86_400_000).toISOString().slice(0, 10);
-      const t = target === "all" ? { allStudents: true } : target.startsWith("h:") ? { hostelId: target.slice(2) } : { departmentId: target.slice(2) };
+      const t = target === "all"
+        ? { allStudents: true }
+        : target.startsWith("r:")
+          ? { residence: target.slice(2) as "HOSTELLER" | "DAY_SCHOLAR" }
+          : target.startsWith("h:") ? { hostelId: target.slice(2) } : { departmentId: target.slice(2) };
       const res = await campus.assignFee(token, { category, title: title.trim(), amountPaise: Math.round(Number(amount) * 100), dueDate: date, allowParts, target: t });
       ribbon.show({ tone: "success", title: `Fee sent to ${res.created} student${res.created === 1 ? "" : "s"}`, body: "They'll get reminders before it's due.", celebrate: true });
       setTitle("");

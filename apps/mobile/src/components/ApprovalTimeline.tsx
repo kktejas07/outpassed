@@ -38,6 +38,19 @@ export function timelineSteps(o: OutpassDto): Step[] {
     });
   }
 
+  // Day scholars: faculty/HOD (or the office when there's no HOD) decides; the parent is only told.
+  if (o.student.residence === "DAY_SCHOLAR" && !faculty?.override) {
+    if (!o.faculty && !faculty) {
+      steps.push({
+        title: warden ? (warden.decision === "APPROVE" ? "Office approved" : "Office rejected") : "Office approval",
+        detail: warden ? `${warden.approverName} · ${when(warden.createdAt)}` : "No HOD set for your department",
+        state: warden ? (warden.decision === "APPROVE" ? "done" : "failed") : o.status === "PENDING_WARDEN" ? "current" : "todo",
+      });
+    }
+    steps.push({ title: "Parent informed", detail: "Day scholar · no parent or warden step", state: "skipped" });
+    return finish(steps, o, rejectedBy);
+  }
+
   if (parent?.override) {
     steps.push({
       title: parent.decision === "APPROVE" ? "Approved by warden (override)" : "Rejected by warden",

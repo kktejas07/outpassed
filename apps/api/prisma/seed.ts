@@ -79,6 +79,21 @@ async function main() {
   await prisma.userPhoto.deleteMany({ where: { userId: diyaUser.id } });
   ids.push(diyaUser.id);
 
+  // A day scholar: lives at home, comes by college bus. No hostel, no warden.
+  const meghanaUser = await upsertUser("meghana@outpass.dev", "Meghana Iyer", "STUDENT", "+919800000014");
+  await prisma.studentProfile.upsert({
+    where: { userId: meghanaUser.id },
+    create: { userId: meghanaUser.id, rollNo: "24CS031", residence: "DAY_SCHOLAR" },
+    update: { rollNo: "24CS031", residence: "DAY_SCHOLAR", hostel: null, hostelId: null, room: null },
+  });
+  await prisma.guardianship.upsert({
+    where: { studentId_parentId: { studentId: meghanaUser.id, parentId: parent.id } },
+    create: { studentId: meghanaUser.id, parentId: parent.id, relation: "Guardian", priority: 1 },
+    update: {},
+  });
+  const meghana = meghanaUser.id;
+  ids.push(meghana);
+
   // Reset demo activity so the screens always show a fresh picture.
   await prisma.outpass.deleteMany({ where: { studentId: { in: ids } } });
   await prisma.notification.deleteMany({});
@@ -202,6 +217,7 @@ async function main() {
       { studentId: asha, category: "BUS", title: "Bus pass · October", amountPaise: 180000, dueDate: day(-4), createdById: admin.id, remindStage: 3, lastRemindedAt: new Date() },
       { studentId: asha, category: "MESS", title: "Mess fee · September", amountPaise: 350000, dueDate: day(-30), status: "PAID", paidAt: day(-32), createdById: admin.id },
       { studentId: karthik, category: "HOSTEL", title: "Hostel fee · Semester 2", amountPaise: 4500000, dueDate: day(3), createdById: admin.id },
+      { studentId: meghana, category: "BUS", title: "Bus pass · Route 7 · October", amountPaise: 180000, dueDate: day(5), createdById: admin.id },
       { studentId: priya, category: "FINE", title: "Late return fine", amountPaise: 20000, dueDate: day(7), note: "Returned 2 hours late on 12 Oct", createdById: admin.id },
     ],
   });

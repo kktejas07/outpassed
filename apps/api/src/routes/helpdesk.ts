@@ -95,6 +95,7 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
       })
       .parse(request.body);
     const profile = await prisma.studentProfile.findUnique({ where: { userId: request.user.sub } });
+    if (profile?.residence === "DAY_SCHOLAR") throw new HttpError(403, "HOSTELLERS_ONLY", "The helpdesk is for hostel problems. Day scholars can raise campus issues with the office.");
     const photo = body.photo ? decodePhoto(body.photo) : null;
     const stored = photo ? await storeImage("ticket", photo) : null;
     const t = await prisma.ticket.create({

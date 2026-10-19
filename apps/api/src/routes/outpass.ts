@@ -15,7 +15,7 @@ import { academicContacts, hodOf } from "../lib/academic";
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { outpassInclude, toOutpassDto } from "../lib/dto";
-import { guardianIds, notifyLater } from "../lib/notify";
+import { guardianIds, idsOfRoles, notifyLater } from "../lib/notify";
 import { studentInHostels, wardenScope, wardensFor } from "../lib/hostels";
 import { when } from "../lib/time";
 import { requireRole } from "../plugins/auth";
@@ -123,13 +123,17 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       const f = await prisma.user.findUnique({ where: { id: body.facultyId } });
       if (!f || f.role !== "FACULTY") throw new HttpError(400, "INVALID_FACULTY", "Pick the faculty member who gave you permission");
     }
+    // Day scholars: the faculty member who gave permission approves, or their HOD if they named nobody.
+    const dayScholar = profile?.residence === "DAY_SCHOLAR";
+    const approverId = body.facultyId ?? (dayScholar ? await hodOf(studentId) : null);
     const status = initialStatus({
       dateOfBirth: profile?.dateOfBirth ?? null,
       hasGuardian: guardianCount > 0,
       adultParentMode: env.ADULT_PARENT_MODE,
       now: new Date(),
-      facultyId: body.facultyId ?? null,
+      facultyId: approverId,
       type: body.type,
+      dayScholar,
     });
 
     const row = await prisma.outpass.create({
@@ -141,7 +145,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
         leaveAt: new Date(body.leaveAt),
         returnBy: new Date(body.returnBy),
         status,
-        facultyId: body.facultyId ?? null,
+        facultyId: approverId,
       },
       include: outpassInclude,
     });
@@ -150,7 +154,25 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     const summary = `${row.destination} · ${when(row.leaveAt)} to ${when(row.returnBy)}`;
     const data = { outpassId: row.id };
     const hod = await hodOf(studentId);
-    if (row.type === "EMERGENCY") {
+    if (dayScholar) {
+      // A day scholar's faculty member or HOD decides; the parent is told now and again on approval.
+      if (status === "PENDING_FACULTY") {
+        notifyLater([row.facultyId!], {
+          kind: "OUTPASS_NEEDS_FACULTY",
+          title: row.type === "EMERGENCY" ? `Emergency exit: ${name} (day scholar)` : `${name} (day scholar) needs your permission to leave`,
+          body: `${typeLabel(row.type)} · ${summary}. ${row.reason}. Tap to approve or reject.`,
+          data,
+        });
+      } else {
+        notifyLater(await idsOfRoles(["ADMIN"]), { kind: "OUTPASS_NEEDS_WARDEN", title: `${name} (day scholar) asked to leave`, body: `${summary}. No HOD is set for their department, so the office decides.`, data });
+      }
+      notifyLater(await guardianIds(studentId), {
+        kind: row.type === "EMERGENCY" ? "OUTPASS_EMERGENCY" : "OUTPASS_FOR_PARENT_INFO",
+        title: `${name} asked to leave campus`,
+        body: `${typeLabel(row.type)} · ${summary}. ${row.faculty ? `${row.faculty.name} will approve.` : "The college will approve."} You'll hear when they leave and return.`,
+        data,
+      });
+    } else if (row.type === "EMERGENCY") {
       // Everyone hears at once; the warden decides.
       notifyLater(await wardensFor(studentId), {
         kind: "OUTPASS_NEEDS_WARDEN",
@@ -187,7 +209,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     // The HOD sees every pass from their department (unless they're the one approving).
-    if (hod && hod !== row.facultyId && row.type !== "EMERGENCY") {
+    if (hod && hod !== row.facultyId && (row.type !== "EMERGENCY" || dayScholar)) {
       notifyLater([hod], {
         kind: "OUTPASS_FOR_HOD",
         title: `${name} asked to go out`,
@@ -211,6 +233,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
 
     const profile = await prisma.studentProfile.findUnique({ where: { userId: current.studentId } });
     const afterFaculty = statusAfterFaculty({
+      dayScholar: profile?.residence === "DAY_SCHOLAR",
       dateOfBirth: profile?.dateOfBirth ?? null,
       hasGuardian: (await prisma.guardianship.count({ where: { studentId: current.studentId } })) > 0,
       adultParentMode: env.ADULT_PARENT_MODE,
@@ -297,6 +320,15 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
         body: `You're cleared for ${updated.destination} from ${when(updated.leaveAt)}. Show your gate pass at the gate.`,
         data,
       });
+      if (updated.student.student?.residence === "DAY_SCHOLAR" && !result.override) {
+        // Day scholars' parents are told rather than asked.
+        notifyLater(await guardianIds(updated.studentId), {
+          kind: "OUTPASS_APPROVED",
+          title: `${name} has permission to leave campus`,
+          body: `${updated.faculty?.name ?? "The college"} approved · ${typeLabel(updated.type)} · ${updated.destination} · ${when(updated.leaveAt)} to ${when(updated.returnBy)}.`,
+          data,
+        });
+      }
       if (result.override) {
         notifyLater(await guardianIds(updated.studentId), {
           kind: "OUTPASS_APPROVED",

@@ -26,7 +26,7 @@ const downloads: { type: ReportType; label: string; body: string; icon: keyof ty
   { type: "movements", label: "Gate movements", body: "Every scan in and out, with the guard and gate", icon: "swap-horizontal" },
   { type: "late", label: "Late returns", body: "Who came back late, and by how long", icon: "time-outline" },
   { type: "visitors", label: "Visitors", body: "Who visited whom, when they arrived and left", icon: "people-outline" },
-  { type: "absences", label: "Roll-call absences", body: "Students missing at night roll call", icon: "moon-outline" },
+  { type: "absences", label: "Roll-call absences", body: "Students missing at night roll call", icon: "clipboard-outline" },
 ];
 
 function Tile({ value, label, tone = color.ink, sub }: { value: number; label: string; tone?: string; sub?: string }) {

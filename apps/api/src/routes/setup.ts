@@ -31,6 +31,7 @@ function tokenOk(given: string | undefined): boolean {
 const DEMO = [
   { email: "student@outpass.dev", label: "Student" },
   { email: "diya@outpass.dev", label: "Student, under 18" },
+  { email: "meghana@outpass.dev", label: "Student, day scholar" },
   { email: "parent@outpass.dev", label: "Parent" },
   { email: "faculty@outpass.dev", label: "Faculty (HOD)" },
   { email: "anita@outpass.dev", label: "Faculty" },

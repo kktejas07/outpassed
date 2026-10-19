@@ -413,7 +413,9 @@ export const campus = {
     request<FeeDto>(`/fees/${id}/proof`, { method: "POST", token, body: { image, reference, ...(amountPaise ? { amountPaise } : {}) } }),
   adminFees: (token: string, status?: string, q?: string) =>
     request<{ fees: FeeDto[]; summary: { outstandingPaise: number; outstanding: number; collectedPaise: number; paid: number; proofsToReview: number } }>(`/admin/fees${qs({ status, q })}`, { token }),
-  assignFee: (token: string, input: { category: FeeDto["category"]; title: string; amountPaise: number; dueDate: string; note?: string; allowParts?: boolean; target: { hostelId?: string; departmentId?: string; allStudents?: boolean; studentIds?: string[] } }) =>
+  setResidence: (token: string, userId: string, residence: "HOSTELLER" | "DAY_SCHOLAR") =>
+    request<UserDto>(`/admin/users/${userId}/residence`, { method: "PUT", token, body: { residence } }),
+  assignFee: (token: string, input: { category: FeeDto["category"]; title: string; amountPaise: number; dueDate: string; note?: string; allowParts?: boolean; target: { hostelId?: string; departmentId?: string; allStudents?: boolean; studentIds?: string[]; residence?: "HOSTELLER" | "DAY_SCHOLAR" } }) =>
     request<{ created: number }>("/admin/fees", { method: "POST", token, body: input }),
   reviewProof: (token: string, paymentId: string, decision: "APPROVE" | "REJECT", note?: string) =>
     request<FeeDto>(`/admin/fee-payments/${paymentId}/review`, { method: "POST", token, body: { decision, note } }),
