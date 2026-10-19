@@ -9,6 +9,8 @@
 import argon2 from "argon2";
 import { prisma } from "../src/lib/prisma";
 import { newPassToken, newVisitCode } from "../src/lib/visitCode";
+import { ensureHostel } from "../src/lib/hostels";
+import { phoneFields } from "../src/lib/phone";
 
 const PASSWORD = "outpass-demo-123";
 const hours = (n: number) => new Date(Date.now() + n * 3_600_000);
@@ -17,29 +19,37 @@ async function upsertUser(email: string, name: string, role: "STUDENT" | "PARENT
   const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
   return prisma.user.upsert({
     where: { email },
-    create: { email, name, role, phone: phone ?? null, passwordHash },
-    update: { name, role },
+    create: { email, name, role, ...phoneFields(phone), passwordHash },
+    update: { name, role, ...phoneFields(phone) },
   });
 }
 
 async function main() {
+  await prisma.institution.upsert({
+    where: { id: 1 },
+    create: { id: 1, name: "Sri Venkateswara Institute of Technology", address: "NH-16, Guntur, Andhra Pradesh" },
+    update: {},
+  });
+  const blockC = await ensureHostel("Block C");
+  await ensureHostel("Block A");
+  await ensureHostel("Girls Hostel");
   const admin = await upsertUser("admin@outpass.dev", "Dr. Meera Iyer", "ADMIN");
   const warden = await upsertUser("warden@outpass.dev", "Mr. Suresh Nair", "WARDEN", "+919800000001");
   await upsertUser("guard@outpass.dev", "Ramesh (Main Gate)", "GUARD");
   const parent = await upsertUser("parent@outpass.dev", "Lakshmi Rao", "PARENT", "+919800000002");
 
   const students = [
-    { email: "student@outpass.dev", name: "Asha Rao", rollNo: "21CS104", room: "214" },
-    { email: "karthik@outpass.dev", name: "Karthik Menon", rollNo: "21ME231", room: "118" },
-    { email: "priya@outpass.dev", name: "Priya Shah", rollNo: "22EC057", room: "305" },
+    { email: "student@outpass.dev", name: "Asha Rao", rollNo: "21CS104", room: "214", phone: "+919800000010" },
+    { email: "karthik@outpass.dev", name: "Karthik Menon", rollNo: "21ME231", room: "118", phone: "+919800000011" },
+    { email: "priya@outpass.dev", name: "Priya Shah", rollNo: "22EC057", room: "305", phone: "+919800000012" },
   ];
   const ids: string[] = [];
   for (const s of students) {
-    const user = await upsertUser(s.email, s.name, "STUDENT");
+    const user = await upsertUser(s.email, s.name, "STUDENT", s.phone);
     await prisma.studentProfile.upsert({
       where: { userId: user.id },
-      create: { userId: user.id, rollNo: s.rollNo, hostel: "Block C", room: s.room, dateOfBirth: new Date("2005-03-14") },
-      update: { rollNo: s.rollNo, hostel: "Block C", room: s.room },
+      create: { userId: user.id, rollNo: s.rollNo, hostel: blockC.name, hostelId: blockC.id, room: s.room, dateOfBirth: new Date("2005-03-14") },
+      update: { rollNo: s.rollNo, hostel: blockC.name, hostelId: blockC.id, room: s.room },
     });
     ids.push(user.id);
   }

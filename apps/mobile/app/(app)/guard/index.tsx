@@ -2,7 +2,8 @@ import { SosBanner } from "../../../src/components/SosBanner";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Animated, Easing, Image, StyleSheet, View } from "react-native";
+import { photoSrc } from "../../../src/api/client";
 import { useGateDesk } from "../../../src/features/gate/useGateDesk";
 import { color, font, radius } from "../../../src/theme/tokens";
 import { Button } from "../../../src/ui/Button";
@@ -145,9 +146,21 @@ export default function GuardScan() {
             {s.phase === "done" && s.queued ? "Saved on this device — it will sync when the network is back." : verdict.message}
           </Text>
 
+          {verdict.person && verdict.kind === "OUTPASS" ? (
+            photoSrc(verdict.person.photoUrl) ? (
+              // Big enough to compare with the face in front of the guard.
+              <Image source={{ uri: photoSrc(verdict.person.photoUrl)! }} style={styles.photo} accessibilityLabel={`Photo of ${verdict.person.name} on file`} />
+            ) : (
+              <View style={styles.noPhoto}>
+                <Ionicons name="id-card-outline" size={18} color={color.amber} />
+                <Text variant="label" style={{ flex: 1, color: color.amber }}>No photo on file — check their college ID</Text>
+              </View>
+            )
+          ) : null}
+
           {verdict.person ? (
             <View style={styles.person}>
-              <Avatar name={verdict.person.name} size={52} tone="accent" />
+              <Avatar name={verdict.person.name} size={52} tone="accent" photoUrl={verdict.person.photoUrl} />
               <View style={{ flex: 1 }}>
                 <Text variant="heading">{verdict.person.name}</Text>
                 <Text variant="caption">{verdict.person.detail}</Text>
@@ -160,7 +173,9 @@ export default function GuardScan() {
 
           {(s.phase === "verdict" || s.phase === "saving") && allowed ? (
             <>
-              <Text variant="label" style={{ alignSelf: "flex-start" }}>Does the face match their ID?</Text>
+              <Text variant="label" style={{ alignSelf: "flex-start" }}>
+                {verdict.kind === "OUTPASS" && verdict.person?.photoUrl ? "Does the face match the photo?" : "Does the face match their ID?"}
+              </Text>
               <View style={styles.row}>
                 <Button style={{ flex: 1 }} tone="danger" label="No match" onPress={() => void desk.confirm(false, mode === "manual" ? "MANUAL" : "QR")} disabled={s.phase === "saving"} />
                 <Button style={{ flex: 1.4 }} tone="success" icon="checkmark" label={verdict.direction === "ENTRY" ? "Let in" : "Let out"} loading={s.phase === "saving"} onPress={() => void desk.confirm(true, mode === "manual" ? "MANUAL" : "QR")} />
@@ -186,6 +201,8 @@ const styles = StyleSheet.create({
   scanLine: { position: "absolute", left: 10, right: 10, height: 2, backgroundColor: color.accentLight, opacity: 0.9 },
   verdict: { backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1.5, padding: 20, alignItems: "center", gap: 12 },
   badge: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  photo: { width: 176, height: 176, borderRadius: radius.lg, backgroundColor: color.ground, borderWidth: 3, borderColor: color.white },
+  noPhoto: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "stretch", padding: 12, borderRadius: radius.md, backgroundColor: color.amberSoft },
   person: { flexDirection: "row", alignItems: "center", gap: 12, alignSelf: "stretch", padding: 12, borderRadius: radius.md, backgroundColor: color.ground },
   late: { backgroundColor: color.redSoft, paddingHorizontal: 8, height: 24, borderRadius: 12, justifyContent: "center" },
   lateText: { fontFamily: font.bodyBold, fontSize: 11, color: color.red },

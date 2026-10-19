@@ -5,6 +5,7 @@ import { env } from "../env";
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { HttpError } from "../plugins/errorHandler";
+import { campusInfo } from "./setup";
 
 /**
  * Routes that need no sign-in. The visitor's pass link carries an
@@ -25,7 +26,7 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
       validTo: visit.validTo.toISOString(),
       code: usable ? visit.code : "",
       qrToken: usable && visit.validTo > new Date() ? issueQrToken(visit.id, "VISIT", env.QR_SECRET) : null,
-      campus: { name: env.CAMPUS_NAME, address: env.CAMPUS_ADDRESS },
+      campus: await campusInfo(),
     };
     reply.header("cache-control", "no-store");
     return pass;

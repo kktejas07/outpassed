@@ -10,7 +10,9 @@ const envSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(16, "JWT_SECRET must be at least 16 characters long"),
-  JWT_EXPIRES_IN: z.string().default("7d"),
+  /** Access tokens are short; the app renews them with a refresh token. */
+  JWT_EXPIRES_IN: z.string().default("15m"),
+  REFRESH_TOKEN_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   CORS_ORIGIN: z.string().default("*"),
   /** Signs gate QR codes. Falls back to JWT_SECRET when unset. */
   QR_SECRET: z.string().min(16).optional(),
@@ -36,6 +38,21 @@ const envSchema = z.object({
   /** Outgoing email (password reset codes), e.g. smtps://user:pass@smtp.example.com:465 */
   SMTP_URL: z.string().optional(),
   MAIL_FROM: z.string().default("Outpass <no-reply@outpassed.studentalumni.ai>"),
+  /** Required to run first-time setup in production. */
+  SETUP_TOKEN: z.string().min(12).optional(),
+  /** SMS for phone sign-in codes: console (development), msg91 or twilio. */
+  SMS_PROVIDER: z.enum(["console", "msg91", "twilio"]).default("console"),
+  MSG91_AUTH_KEY: z.string().optional(),
+  MSG91_TEMPLATE_ID: z.string().optional(),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM: z.string().optional(),
+  /** Country code assumed for 10-digit numbers. */
+  DEFAULT_COUNTRY_CODE: z.string().regex(/^\d{1,3}$/).default("91"),
+  RATE_LIMIT: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
 });
 
 const parsed = envSchema.safeParse(process.env);

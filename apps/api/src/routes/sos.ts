@@ -5,10 +5,11 @@ import { FlowError } from "../domain/outpassFlow";
 import { idsOfRoles, notifyLater } from "../lib/notify";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
+import { photoUrl } from "../lib/photo";
 import { HttpError } from "../plugins/errorHandler";
 
 const sosInclude = {
-  raisedBy: { include: { student: true } },
+  raisedBy: { include: { student: true, photo: { select: { updatedAt: true } } } },
   acknowledgedBy: true,
   resolvedBy: true,
 } satisfies Prisma.SosAlertInclude;
@@ -30,6 +31,7 @@ function toSosDto(row: SosRow): SosDto {
       rollNo: row.raisedBy.student?.rollNo ?? null,
       hostel: row.raisedBy.student?.hostel ?? null,
       room: row.raisedBy.student?.room ?? null,
+      photoUrl: photoUrl(row.raisedBy.id, row.raisedBy.photo?.updatedAt),
     },
     acknowledgedByName: row.acknowledgedBy?.name ?? null,
     acknowledgedAt: row.acknowledgedAt?.toISOString() ?? null,

@@ -1,7 +1,19 @@
 import { createHash, randomInt } from "node:crypto";
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
-import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, type AuthResponse } from "@outpassed/shared";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  otpRequestSchema,
+  otpVerifySchema,
+  refreshSchema,
+  registerSchema,
+  resetPasswordSchema,
+} from "@outpassed/shared";
+import { ensureHostel } from "../lib/hostels";
+import { normalizePhone, phoneFields } from "../lib/phone";
+import { endSession, issueSession, rotateSession } from "../lib/session";
+import { sendSms } from "../lib/sms";
 import { sendMail } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
 import { toUserDto } from "../lib/dto";
@@ -21,20 +33,32 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (taken) throw new HttpError(409, "ROLL_TAKEN", "Roll number is already registered");
     }
 
+    // A picked hostel wins; typed text is matched to (or creates) a hostel.
+    let hostel: { id: string; name: string } | null = null;
+    if (body.role === "STUDENT") {
+      if (body.hostelId) {
+        hostel = await prisma.hostel.findUnique({ where: { id: body.hostelId } });
+        if (!hostel) throw new HttpError(404, "HOSTEL_NOT_FOUND", "Hostel not found");
+      } else if (body.hostel) {
+        hostel = await ensureHostel(body.hostel);
+      }
+    }
+
     const passwordHash = await argon2.hash(body.password, { type: argon2.argon2id });
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
         name: body.name,
-        phone: body.phone ?? null,
+        ...phoneFields(body.phone),
         role: body.role,
         student:
           body.role === "STUDENT"
             ? {
                 create: {
                   rollNo: body.rollNo ?? null,
-                  hostel: body.hostel ?? null,
+                  hostel: hostel?.name ?? null,
+                  hostelId: hostel?.id ?? null,
                   room: body.room ?? null,
                   dateOfBirth: body.dateOfBirth ? new Date(`${body.dateOfBirth}T00:00:00Z`) : null,
                 },
@@ -44,18 +68,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       include: { student: true },
     });
 
-    const payload: AuthResponse = {
-      accessToken: app.jwt.sign({ sub: user.id, email: user.email, role: user.role }),
-      user: toUserDto(user),
-    };
-    return reply.status(201).send(payload);
+    return reply.status(201).send(await issueSession(app, user));
   });
 
   app.post("/auth/login", async (request) => {
     const body = loginSchema.parse(request.body);
     const email = body.email.toLowerCase();
 
-    const user = await prisma.user.findUnique({ where: { email }, include: { student: true } });
+    const user = await prisma.user.findUnique({ where: { email }, include: withPhoto });
     if (!user) {
       throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid email or password");
     }
@@ -65,17 +85,72 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid email or password");
     }
 
-    const payload: AuthResponse = {
-      accessToken: app.jwt.sign({ sub: user.id, email: user.email, role: user.role }),
-      user: toUserDto(user),
-    };
-    return payload;
+    return issueSession(app, user);
+  });
+
+  /** Swaps a refresh token for a fresh pair. */
+  app.post("/auth/refresh", async (request) => {
+    const { refreshToken } = refreshSchema.parse(request.body);
+    return rotateSession(app, refreshToken);
+  });
+
+  /** Ends this device's session so its refresh token stops working. */
+  app.post("/auth/logout", async (request, reply) => {
+    const { refreshToken } = refreshSchema.parse(request.body);
+    await endSession(refreshToken);
+    return reply.status(204).send();
+  });
+
+  /**
+   * Texts a 6-digit sign-in code. Answers the same way whether or not the
+   * number has an account, and sends at most 3 codes per 10 minutes.
+   */
+  app.post("/auth/otp/request", async (request) => {
+    const { phone } = otpRequestSchema.parse(request.body);
+    const normalized = normalizePhone(phone);
+    if (!normalized) throw new HttpError(400, "INVALID_PHONE", "Enter a valid mobile number");
+    const known = await prisma.user.count({ where: { phoneNormalized: normalized } });
+    if (known > 0) {
+      const recent = await prisma.otpCode.count({ where: { phone: normalized, createdAt: { gt: new Date(Date.now() - 10 * 60_000) } } });
+      if (recent < 3) {
+        const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+        await prisma.otpCode.create({
+          data: { phone: normalized, codeHash: hashCode(normalized, code), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+        });
+        await sendSms({ to: normalized, code, text: `${code} is your Outpass sign-in code. It expires in 10 minutes. Don't share it with anyone.` });
+      }
+    }
+    return { ok: true, message: "If that number has an account, we've texted a code to it." };
+  });
+
+  app.post("/auth/otp/verify", async (request) => {
+    const body = otpVerifySchema.parse(request.body);
+    const invalid = new HttpError(400, "INVALID_CODE", "That code is wrong or has expired. Request a new one.");
+    const normalized = normalizePhone(body.phone);
+    if (!normalized) throw invalid;
+    const otp = await prisma.otpCode.findFirst({
+      where: { phone: normalized, usedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!otp || otp.attempts >= MAX_ATTEMPTS) throw invalid;
+    if (otp.codeHash !== hashCode(normalized, body.code)) {
+      await prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      throw invalid;
+    }
+    const used = await prisma.otpCode.updateMany({ where: { id: otp.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (used.count === 0) throw invalid;
+    const users = await prisma.user.findMany({ where: { phoneNormalized: normalized }, include: withPhoto, take: 2 });
+    if (users.length === 0) throw invalid;
+    if (users.length > 1) {
+      throw new HttpError(409, "MULTIPLE_ACCOUNTS", "More than one account uses this number. Sign in with your email instead.");
+    }
+    return issueSession(app, users[0]!);
   });
 
   app.get("/auth/me", { onRequest: [app.authenticate] }, async (request) => {
     const user = await prisma.user.findUnique({
       where: { id: request.user.sub },
-      include: { student: true },
+      include: withPhoto,
     });
     if (!user) {
       throw new HttpError(404, "NOT_FOUND", "User not found");
@@ -112,7 +187,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/auth/reset", async (request) => {
     const body = resetPasswordSchema.parse(request.body);
     const invalid = new HttpError(400, "INVALID_CODE", "That code is wrong or has expired. Request a new one.");
-    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() }, include: { student: true } });
+    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() }, include: withPhoto });
     if (!user) throw invalid;
     const reset = await prisma.passwordReset.findFirst({
       where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
@@ -127,16 +202,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await prisma.$transaction([
       prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
       prisma.passwordReset.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
+      // A new password signs out every other device.
+      prisma.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
     ]);
-    const payload: AuthResponse = {
-      accessToken: app.jwt.sign({ sub: user.id, email: user.email, role: user.role }),
-      user: toUserDto(user),
-    };
-    return payload;
+    return issueSession(app, user);
   });
 }
 
+const withPhoto = { student: true, photo: { select: { updatedAt: true } } } as const;
 const RESET_TTL_MS = 15 * 60_000;
+const OTP_TTL_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 5;
 
 function hashCode(userId: string, code: string): string {

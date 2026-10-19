@@ -9,7 +9,11 @@ import type {
   GateEventList,
   GateVerdict,
   GuardianshipDto,
+  HostelDto,
   HostList,
+  ImportResult,
+  SetupInput,
+  SetupStatus,
   LinkGuardianInput,
   MeResponse,
   NotificationList,
@@ -48,24 +52,46 @@ export class ApiError extends Error {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   token?: string | null;
 };
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  let response: Response;
+/**
+ * Access tokens last about 15 minutes. When one is rejected, the session
+ * renews it with the refresh token and the request is tried once more.
+ */
+type Renew = (failedToken: string) => Promise<string | null>;
+let renewToken: Renew | null = null;
+export function setTokenRenewer(fn: Renew | null) {
+  renewToken = fn;
+}
+
+/** Full address of a photo link from the API (which returns relative links). */
+export function photoSrc(url: string | null | undefined): string | null {
+  return url ? `${BASE_URL}${url}` : null;
+}
+
+async function send(path: string, options: RequestOptions, token: string | null | undefined): Promise<Response> {
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    return await fetch(`${BASE_URL}${path}`, {
       method: options.method ?? "GET",
       headers: {
         ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
-        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
   } catch {
     throw new ApiError("Can't reach the server. Check your connection.", 0, "NETWORK");
+  }
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  let response = await send(path, options, options.token);
+  if (response.status === 401 && options.token && renewToken) {
+    const fresh = await renewToken(options.token);
+    if (fresh) response = await send(path, options, fresh);
   }
 
   if (response.status === 204) return undefined as T;
@@ -98,6 +124,33 @@ export const api = {
   forgotPassword: (email: string) =>
     request<{ ok: true; message: string }>("/auth/forgot", { method: "POST", body: { email } }),
   resetPassword: (input: ResetPasswordInput) => request<AuthResponse>("/auth/reset", { method: "POST", body: input }),
+  refresh: (refreshToken: string) => request<AuthResponse>("/auth/refresh", { method: "POST", body: { refreshToken } }),
+  logout: (refreshToken: string) => request<void>("/auth/logout", { method: "POST", body: { refreshToken } }),
+  otpRequest: (phone: string) => request<{ ok: true; message: string }>("/auth/otp/request", { method: "POST", body: { phone } }),
+  otpVerify: (phone: string, code: string) => request<AuthResponse>("/auth/otp/verify", { method: "POST", body: { phone, code } }),
+
+  // First-time setup
+  setupStatus: () => request<SetupStatus>("/setup"),
+  setup: (input: SetupInput) => request<AuthResponse>("/setup", { method: "POST", body: input }),
+
+  // Hostels
+  hostels: () => request<{ hostels: { id: string; name: string }[] }>("/hostels").then((r) => r.hostels),
+  adminHostels: (token: string) => request<{ hostels: HostelDto[] }>("/admin/hostels", { token }).then((r) => r.hostels),
+  createHostel: (token: string, name: string) => request<HostelDto>("/admin/hostels", { method: "POST", token, body: { name } }),
+  renameHostel: (token: string, id: string, name: string) => request<HostelDto>(`/admin/hostels/${id}`, { method: "PATCH", token, body: { name } }),
+  assignWarden: (token: string, id: string, userId: string) =>
+    request<HostelDto>(`/admin/hostels/${id}/wardens`, { method: "POST", token, body: { userId } }),
+  unassignWarden: (token: string, id: string, userId: string) =>
+    request<HostelDto>(`/admin/hostels/${id}/wardens/${userId}`, { method: "DELETE", token }),
+
+  // Photos (base64 JPEG)
+  uploadMyPhoto: (token: string, image: string) => request<{ photoUrl: string }>("/me/photo", { method: "PUT", token, body: { image } }),
+  uploadUserPhoto: (token: string, userId: string, image: string) =>
+    request<{ photoUrl: string }>(`/admin/users/${userId}/photo`, { method: "PUT", token, body: { image } }),
+
+  // Bulk import
+  importStudents: (token: string, csv: string, dryRun: boolean, sendWelcome = false) =>
+    request<ImportResult>("/admin/import/students", { method: "POST", token, body: { csv, dryRun, sendWelcome } }),
 
   // Notifications
   notifications: (token: string) => request<NotificationList>("/notifications", { token }),

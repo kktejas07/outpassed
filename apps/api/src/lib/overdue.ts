@@ -1,5 +1,6 @@
 import { when } from "./time";
-import { guardianIds, notify, wardenIds } from "./notify";
+import { guardianIds, notify } from "./notify";
+import { wardensFor } from "./hostels";
 import { prisma } from "./prisma";
 
 /**
@@ -13,7 +14,6 @@ export async function sweepOverdue(now = new Date()): Promise<number> {
     take: 200,
   });
   if (rows.length === 0) return 0;
-  const wardens = await wardenIds();
   for (const row of rows) {
     // Claim the row first so two server instances don't both alert.
     const claimed = await prisma.outpass.updateMany({
@@ -21,7 +21,7 @@ export async function sweepOverdue(now = new Date()): Promise<number> {
       data: { overdueAlertedAt: now },
     });
     if (claimed.count === 0) continue;
-    const parents = await guardianIds(row.studentId);
+    const [parents, wardens] = await Promise.all([guardianIds(row.studentId), wardensFor(row.studentId)]);
     await notify([row.studentId], {
       kind: "STUDENT_OVERDUE",
       title: "You're past your return time",

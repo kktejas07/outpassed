@@ -1,7 +1,8 @@
 import type { NoticeAudience, Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createNoticeSchema, idParamSchema, type NoticeDto } from "@outpassed/shared";
-import { idsOfRoles, notifyLater } from "../lib/notify";
+import { notifyLater } from "../lib/notify";
+import { hostelsOfViewer, wardenScope } from "../lib/hostels";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
@@ -14,13 +15,27 @@ function audiencesFor(role: string): NoticeAudience[] | null {
   return null; // staff see every notice
 }
 
-function rolesFor(audience: NoticeAudience): ("STUDENT" | "PARENT")[] {
-  return audience === "STUDENTS" ? ["STUDENT"] : audience === "PARENTS" ? ["PARENT"] : ["STUDENT", "PARENT"];
+/** Students and/or parents who should get a notice, limited to one hostel when set. */
+function recipientsWhere(audience: NoticeAudience, hostelId: string | null): Prisma.UserWhereInput {
+  const students: Prisma.UserWhereInput = { role: "STUDENT", ...(hostelId ? { student: { hostelId } } : {}) };
+  const parents: Prisma.UserWhereInput = {
+    role: "PARENT",
+    ...(hostelId ? { wards: { some: { student: { student: { hostelId } } } } } : {}),
+  };
+  if (audience === "STUDENTS") return students;
+  if (audience === "PARENTS") return parents;
+  return { OR: [students, parents] };
 }
 
-function visible(request: FastifyRequest): Prisma.NoticeWhereInput {
-  const a = audiencesFor(request.user.role);
-  return a ? { audience: { in: a } } : {};
+async function visible(request: FastifyRequest): Promise<Prisma.NoticeWhereInput> {
+  const { role, sub } = request.user;
+  const a = audiencesFor(role);
+  if (a) {
+    const hostels = await hostelsOfViewer(sub, role);
+    return { audience: { in: a }, OR: [{ hostelId: null }, { hostelId: { in: hostels } }] };
+  }
+  const scope = await wardenScope(sub, role);
+  return scope ? { OR: [{ hostelId: null }, { hostelId: { in: scope } }] } : {};
 }
 
 /** Hostel notice board. Wardens post; students and parents get an alert and the warden sees who's read it. */
@@ -31,28 +46,29 @@ export async function noticeRoutes(app: FastifyInstance): Promise<void> {
     const userId = request.user.sub;
     const staff = STAFF.has(request.user.role);
     const rows = await prisma.notice.findMany({
-      where: visible(request),
-      include: { author: true, reads: { where: { userId }, select: { userId: true } }, _count: { select: { reads: true } } },
+      where: await visible(request),
+      include: { author: true, hostel: true, reads: { where: { userId }, select: { userId: true } }, _count: { select: { reads: true } } },
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       take: 50,
     });
-    const totals = staff
-      ? {
-          STUDENTS: await prisma.user.count({ where: { role: "STUDENT" } }),
-          PARENTS: await prisma.user.count({ where: { role: "PARENT" } }),
-        }
-      : null;
+    // How many people each notice reached, counted once per audience and hostel.
+    const totals = new Map<string, number>();
+    if (staff) {
+      for (const n of rows) {
+        const key = `${n.audience}:${n.hostelId ?? ""}`;
+        if (!totals.has(key)) totals.set(key, await prisma.user.count({ where: recipientsWhere(n.audience, n.hostelId) }));
+      }
+    }
     const notices: NoticeDto[] = rows.map((n) => ({
       id: n.id,
       title: n.title,
       body: n.body,
       audience: n.audience,
       pinned: n.pinned,
+      hostelName: n.hostel?.name ?? null,
       authorName: n.author.name,
       read: n.reads.length > 0,
-      receipts: totals
-        ? { read: n._count.reads, total: n.audience === "EVERYONE" ? totals.STUDENTS + totals.PARENTS : totals[n.audience] }
-        : null,
+      receipts: staff ? { read: n._count.reads, total: totals.get(`${n.audience}:${n.hostelId ?? ""}`) ?? 0 } : null,
       createdAt: n.createdAt.toISOString(),
     }));
     return { notices, unread: staff ? 0 : notices.filter((n) => !n.read).length };
@@ -61,8 +77,21 @@ export async function noticeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notices", async (request, reply) => {
     requireRole(request, "WARDEN", "ADMIN");
     const body = createNoticeSchema.parse(request.body);
-    const row = await prisma.notice.create({ data: { ...body, authorId: request.user.sub } });
-    notifyLater(await idsOfRoles(rolesFor(row.audience)), {
+    const scope = await wardenScope(request.user.sub, request.user.role);
+    let hostelId = body.hostelId ?? null;
+    if (hostelId && !(await prisma.hostel.findUnique({ where: { id: hostelId } }))) {
+      throw new HttpError(404, "HOSTEL_NOT_FOUND", "Hostel not found");
+    }
+    if (scope) {
+      if (hostelId && !scope.includes(hostelId)) throw new HttpError(403, "FORBIDDEN", "You can only post to your own hostels");
+      if (!hostelId) {
+        if (scope.length > 1) throw new HttpError(400, "PICK_HOSTEL", "Pick which hostel this notice is for");
+        hostelId = scope[0]!;
+      }
+    }
+    const row = await prisma.notice.create({ data: { ...body, hostelId, authorId: request.user.sub } });
+    const recipients = await prisma.user.findMany({ where: recipientsWhere(row.audience, row.hostelId), select: { id: true } });
+    notifyLater(recipients.map((r) => r.id), {
       kind: "NOTICE_POSTED",
       title: `Notice: ${row.title}`,
       body: row.body.length > 140 ? `${row.body.slice(0, 137)}…` : row.body,
@@ -73,7 +102,7 @@ export async function noticeRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/notices/:id/read", async (request, reply) => {
     const { id } = idParamSchema.parse(request.params);
-    const notice = await prisma.notice.findFirst({ where: { ...visible(request), id } });
+    const notice = await prisma.notice.findFirst({ where: { ...(await visible(request)), id } });
     if (!notice) throw new HttpError(404, "NOT_FOUND", "Notice not found");
     if (!STAFF.has(request.user.role)) {
       await prisma.noticeRead.upsert({

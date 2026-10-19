@@ -1,4 +1,4 @@
-import type { Role } from "@outpassed/shared";
+import type { HostelDto, ImportResult, Role } from "@outpassed/shared";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useAction, useQuery } from "../../lib/useQuery";
@@ -66,5 +66,93 @@ export function useLinkGuardian(studentId: string | null, onDone: () => void) {
     },
     submitting: action.busy,
     error: action.error,
+  };
+}
+
+/** Bulk import: load a CSV, preview what would happen, then import. */
+export function useImport() {
+  const [csv, setCsv] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [sendWelcome, setSendWelcome] = useState(true);
+  const [preview, setPreview] = useState<ImportResult | null>(null);
+  const [done, setDone] = useState<ImportResult | null>(null);
+  const ribbon = useRibbon();
+  const action = useAction((t, dryRun: boolean) => api.importStudents(t, csv, dryRun, sendWelcome));
+  return {
+    csv,
+    setCsv: (v: string) => {
+      setCsv(v);
+      setPreview(null);
+      setDone(null);
+    },
+    fileName,
+    setFileName,
+    sendWelcome,
+    setSendWelcome,
+    preview,
+    done,
+    busy: action.busy,
+    error: action.error,
+    check: async () => {
+      setDone(null);
+      const r = await action.run(true);
+      if (r) setPreview(r);
+    },
+    commit: async () => {
+      const r = await action.run(false);
+      if (r) {
+        setDone(r);
+        setPreview(null);
+        ribbon.show({
+          tone: "success",
+          celebrate: r.summary.created > 0,
+          title: `${r.summary.created} student${r.summary.created === 1 ? "" : "s"} added`,
+          body: [
+            r.summary.updated ? `${r.summary.updated} updated` : null,
+            r.summary.parentsCreated ? `${r.summary.parentsCreated} parents added` : null,
+            r.summary.errors ? `${r.summary.errors} rows skipped` : null,
+          ].filter(Boolean).join(" · ") || undefined,
+        });
+      }
+    },
+  };
+}
+
+/** Hostels and which wardens look after each one. */
+export function useHostels() {
+  const q = useQuery(async (t) => {
+    const [hostels, wardens] = await Promise.all([api.adminHostels(t), api.listUsers(t, "WARDEN")]);
+    return { hostels, wardens };
+  });
+  const ribbon = useRibbon();
+  const replace = (h: HostelDto) =>
+    q.setData((d) => (d ? { ...d, hostels: d.hostels.some((x) => x.id === h.id) ? d.hostels.map((x) => (x.id === h.id ? h : x)) : [...d.hostels, h].sort((a, b) => a.name.localeCompare(b.name)) } : d));
+  const create = useAction((t, name: string) => api.createHostel(t, name));
+  const rename = useAction((t, id: string, name: string) => api.renameHostel(t, id, name));
+  const assign = useAction((t, id: string, userId: string) => api.assignWarden(t, id, userId));
+  const unassign = useAction((t, id: string, userId: string) => api.unassignWarden(t, id, userId));
+  return {
+    ...q,
+    hostels: q.data?.hostels ?? [],
+    wardens: q.data?.wardens ?? [],
+    busy: create.busy || rename.busy || assign.busy || unassign.busy,
+    actionError: create.error ?? rename.error ?? assign.error ?? unassign.error,
+    create: async (name: string) => {
+      const h = await create.run(name.trim());
+      if (h) {
+        replace(h);
+        ribbon.show({ tone: "success", title: `${h.name} added` });
+      }
+      return !!h;
+    },
+    rename: async (id: string, name: string) => {
+      const h = await rename.run(id, name.trim());
+      if (h) replace(h);
+      return !!h;
+    },
+    toggleWarden: async (id: string, userId: string, on: boolean) => {
+      const h = on ? await assign.run(id, userId) : await unassign.run(id, userId);
+      if (h) replace(h);
+    },
   };
 }

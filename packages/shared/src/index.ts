@@ -32,6 +32,8 @@ export const registerSchema = z.object({
   // Student-only profile fields.
   rollNo: z.string().trim().max(40).optional(),
   hostel: z.string().trim().max(80).optional(),
+  /** Pick from GET /hostels; takes precedence over the free-text `hostel`. */
+  hostelId: uuidSchema.optional(),
   room: z.string().trim().max(20).optional(),
   dateOfBirth: z.iso.date().optional(),
 });
@@ -44,6 +46,7 @@ export const loginSchema = z.object({
 export const studentProfileSchema = z.object({
   rollNo: z.string().nullable(),
   hostel: z.string().nullable(),
+  hostelId: z.string().nullable(),
   room: z.string().nullable(),
   dateOfBirth: z.string().nullable(),
 });
@@ -56,11 +59,46 @@ export const userSchema = z.object({
   role: roleSchema,
   createdAt: z.string(),
   student: studentProfileSchema.nullable(),
+  /** Signed link to the profile photo (prefix with the API address), or null. */
+  photoUrl: z.string().nullable(),
 });
 
 export const authResponseSchema = z.object({
+  /** Short-lived (about 15 minutes). */
   accessToken: z.string(),
+  /** Long-lived; swap at POST /auth/refresh for a new pair. Works once. */
+  refreshToken: z.string(),
   user: userSchema,
+});
+
+export const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
+
+export const otpRequestSchema = z.object({ phone: z.string().trim().min(8).max(20) });
+export const otpVerifySchema = z.object({
+  phone: z.string().trim().min(8).max(20),
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+
+export const setupStatusSchema = z.object({
+  needsSetup: z.boolean(),
+  /** True when the server requires a setup key to continue. */
+  tokenRequired: z.boolean(),
+  institution: z.object({ name: z.string(), address: z.string() }).nullable(),
+});
+
+export const setupSchema = z.object({
+  setupToken: z.string().max(200).optional(),
+  institutionName: z.string().trim().min(2).max(120),
+  address: z.string().trim().max(300).default(""),
+  adminName: z.string().trim().min(1).max(120),
+  adminEmail: emailSchema,
+  password: passwordSchema,
+  hostels: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+});
+
+export const photoUploadSchema = z.object({
+  /** Base64 JPEG or PNG, with or without a data: prefix. */
+  image: z.string().min(100).max(700_000),
 });
 
 export const meResponseSchema = z.object({
@@ -155,6 +193,7 @@ export const outpassSchema = z.object({
     rollNo: z.string().nullable(),
     hostel: z.string().nullable(),
     room: z.string().nullable(),
+    photoUrl: z.string().nullable(),
   }),
   approvals: z.array(approvalSchema),
   /** The latest request to come back later, if any. */
@@ -212,6 +251,8 @@ export const gateVerdictSchema = z.object({
     .object({
       name: z.string(),
       detail: z.string(),
+      /** Photo to compare at the gate; null when none is on file. */
+      photoUrl: z.string().nullable().default(null),
     })
     .nullable(),
 });
@@ -369,7 +410,7 @@ export const parcelSchema = z.object({
   status: parcelStatusSchema,
   /** Only the student sees the code; staff get null. */
   code: z.string().nullable(),
-  student: z.object({ id: uuidSchema, name: z.string(), rollNo: z.string().nullable(), hostel: z.string().nullable(), room: z.string().nullable() }),
+  student: z.object({ id: uuidSchema, name: z.string(), rollNo: z.string().nullable(), hostel: z.string().nullable(), room: z.string().nullable(), photoUrl: z.string().nullable() }),
   loggedByName: z.string(),
   collectedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -394,7 +435,7 @@ export const sosSchema = z.object({
   kind: sosKindSchema,
   note: z.string().nullable(),
   status: sosStatusSchema,
-  raisedBy: z.object({ id: uuidSchema, name: z.string(), phone: z.string().nullable(), rollNo: z.string().nullable(), hostel: z.string().nullable(), room: z.string().nullable() }),
+  raisedBy: z.object({ id: uuidSchema, name: z.string(), phone: z.string().nullable(), rollNo: z.string().nullable(), hostel: z.string().nullable(), room: z.string().nullable(), photoUrl: z.string().nullable() }),
   acknowledgedByName: z.string().nullable(),
   acknowledgedAt: z.string().nullable(),
   resolvedByName: z.string().nullable(),
@@ -414,6 +455,8 @@ export const createNoticeSchema = z.object({
   body: z.string().trim().min(1).max(4000),
   audience: noticeAudienceSchema.default("STUDENTS"),
   pinned: z.boolean().default(false),
+  /** Limit to one hostel; omit for every hostel the author covers. */
+  hostelId: uuidSchema.optional(),
 });
 
 export const noticeSchema = z.object({
@@ -422,6 +465,7 @@ export const noticeSchema = z.object({
   body: z.string(),
   audience: noticeAudienceSchema,
   pinned: z.boolean(),
+  hostelName: z.string().nullable(),
   authorName: z.string(),
   read: z.boolean(),
   /** Staff only: how many people it went to and how many have opened it. */
@@ -430,6 +474,50 @@ export const noticeSchema = z.object({
 });
 
 export const noticeListSchema = z.object({ notices: z.array(noticeSchema), unread: z.number().int() });
+
+// --- Hostels ---
+
+export const hostelSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  students: z.number().int(),
+  wardens: z.array(z.object({ id: uuidSchema, name: z.string() })),
+});
+export const hostelListSchema = z.object({ hostels: z.array(hostelSchema) });
+export const hostelNameSchema = z.object({ name: z.string().trim().min(1).max(80) });
+export const assignWardenSchema = z.object({ userId: uuidSchema });
+
+// --- Bulk import ---
+
+export const importSchema = z.object({
+  csv: z.string().min(1).max(2_000_000),
+  /** Validate and preview without saving. */
+  dryRun: z.boolean().default(true),
+  /** Email new accounts how to set their password. */
+  sendWelcome: z.boolean().default(false),
+});
+
+export const importRowSchema = z.object({
+  row: z.number().int(),
+  name: z.string(),
+  rollNo: z.string(),
+  action: z.enum(["create", "update", "error"]),
+  parent: z.enum(["create", "link", "none"]),
+  message: z.string().nullable(),
+});
+
+export const importResultSchema = z.object({
+  dryRun: z.boolean(),
+  rows: z.array(importRowSchema),
+  summary: z.object({
+    created: z.number().int(),
+    updated: z.number().int(),
+    parentsCreated: z.number().int(),
+    parentsLinked: z.number().int(),
+    hostelsCreated: z.number().int(),
+    errors: z.number().int(),
+  }),
+});
 
 // --- Notifications ---
 
@@ -513,6 +601,12 @@ export type HostList = z.infer<typeof hostListSchema>;
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type PublicVisitPass = z.infer<typeof publicVisitPassSchema>;
+export type SetupStatus = z.infer<typeof setupStatusSchema>;
+export type SetupInput = z.input<typeof setupSchema>;
+export type HostelDto = z.infer<typeof hostelSchema>;
+export type HostelList = z.infer<typeof hostelListSchema>;
+export type ImportResult = z.infer<typeof importResultSchema>;
+export type ImportRow = z.infer<typeof importRowSchema>;
 export type ExtensionRequestInput = z.infer<typeof extensionRequestSchema>;
 export type ParcelDto = z.infer<typeof parcelSchema>;
 export type ParcelList = z.infer<typeof parcelListSchema>;

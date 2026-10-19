@@ -1,7 +1,9 @@
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createStaffSchema, linkGuardianSchema, roleSchema, type GuardianshipDto } from "@outpassed/shared";
+import { createStaffSchema, importSchema, linkGuardianSchema, roleSchema, type GuardianshipDto } from "@outpassed/shared";
+import { importStudents } from "../lib/importStudents";
+import { phoneFields } from "../lib/phone";
 import { prisma } from "../lib/prisma";
 import { toUserDto } from "../lib/dto";
 import { requireRole } from "../plugins/auth";
@@ -23,7 +25,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         email,
         passwordHash: await argon2.hash(body.password, { type: argon2.argon2id }),
         name: body.name,
-        phone: body.phone ?? null,
+        ...phoneFields(body.phone),
         role: body.role,
       },
       include: { student: true },
@@ -35,7 +37,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const { role } = z.object({ role: roleSchema.optional() }).parse(request.query);
     const users = await prisma.user.findMany({
       where: role ? { role } : {},
-      include: { student: true },
+      include: { student: true, photo: { select: { updatedAt: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -68,5 +70,17 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       priority: row.priority,
     };
     return reply.status(201).send(dto);
+  });
+
+  /** Bulk-adds students and parents from a CSV. Preview with dryRun first. */
+  app.post("/admin/import/students", { bodyLimit: 3 * 1024 * 1024 }, async (request) => {
+    const body = importSchema.parse(request.body);
+    try {
+      return await importStudents(body.csv, { dryRun: body.dryRun, sendWelcome: body.sendWelcome });
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "MISSING_COLUMNS" || code === "TOO_MANY_ROWS") throw new HttpError(400, code, (err as Error).message);
+      throw err;
+    }
   });
 }

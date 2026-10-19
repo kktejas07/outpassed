@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.1",
+    "@fastify/helmet": "13.2.0",
     "@fastify/jwt": "^10.2.5",
+    "@fastify/rate-limit": "10.3.0",
     "@outpassed/shared": "workspace:*",
     "@prisma/adapter-pg": "6.19.3",
     "@prisma/client": "6.19.3",

@@ -112,6 +112,40 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 - Status updates are conditional, so double scans and parallel approvals
   can't both win.
 
+**Hostels and wardens**
+
+- Each student belongs to a hostel. An admin assigns wardens to hostels in
+  **People → Hostels**. A warden sees requests, dashboard numbers, alerts and
+  notices only for their hostels; a warden with no hostels covers all of them.
+
+**Sign-in and sessions**
+
+- Students and parents can sign in with a code texted to the phone number the
+  college has on file (`SMS_PROVIDER=msg91` or `twilio`), or with email and
+  password.
+- Access tokens last 15 minutes. The app renews them with a refresh token
+  that works once; if an old one is presented again, every session from that
+  sign-in ends. Resetting a password signs out all devices.
+- Sign-in, code and gate routes are rate-limited per address
+  (`@fastify/rate-limit`), and every response carries security headers
+  (`@fastify/helmet`).
+
+**Photos at the gate**
+
+- Students add a photo on the **Me** tab (admins and wardens can add one in
+  **People**). The guard's verdict shows it large so they can compare faces;
+  with no photo on file it says to check the college ID.
+
+**Getting a college started**
+
+- On a new server the app opens **Set up Outpass**: the college's name and
+  address (shown on visitor passes), the first admin and the hostels. In
+  production it asks for `SETUP_TOKEN`.
+- **People → Import students** takes a CSV (name, rollNo, email or phone,
+  hostel, room, dateOfBirth, parent name/email/phone, relation), previews every
+  row, then creates or updates students and links their parents. Re-importing
+  the same file updates rather than duplicates.
+
 **App structure (MVVM)**
 
 - Screens live in `apps/mobile/app/` (Expo Router). Each role has its own tab
@@ -126,13 +160,23 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 
 ## API
 
-All routes except auth and health need a `Bearer` token. Roles are enforced
+All routes except auth, setup, hostels, public and health need a `Bearer` token. Roles are enforced
 on the server.
 
 | Method | Path | Who | Description |
 | --- | --- | --- | --- |
 | `POST` | `/auth/register` | — | Student or parent sign-up |
-| `POST` | `/auth/login` | — | Log in, return JWT |
+| `POST` | `/auth/login` | — | Log in; returns a 15-minute access token and a refresh token |
+| `POST` | `/auth/refresh` | — | Swap a refresh token for a new pair (each works once; reuse ends the session family) |
+| `POST` | `/auth/logout` | — | Revoke this device's refresh token |
+| `POST` | `/auth/otp/request` · `/auth/otp/verify` | — | Text a 6-digit code to a phone on file, then sign in with it |
+| `GET` · `POST` | `/setup` | — | First-time setup: college name, first admin, hostels (only until an admin exists) |
+| `GET` | `/hostels` | — | Hostel names for the sign-up picker |
+| `GET` · `POST` · `PATCH` | `/admin/hostels[/:id]` | admin (list: also warden) | List, add or rename hostels |
+| `POST` · `DELETE` | `/admin/hostels/:id/wardens[/:userId]` | admin | Assign or unassign a warden |
+| `PUT` | `/me/photo` · `/admin/users/:id/photo` | any · admin, warden | Upload a profile photo (base64 JPEG/PNG, ≤ 500 KB) |
+| `GET` | `/photos/:userId?v=&exp=&sig=` | signed link | The photo, from the `photoUrl` in API responses |
+| `POST` | `/admin/import/students` | admin | CSV import of students and parents (`dryRun` previews) |
 | `GET` | `/auth/me` | any | Current user, with student profile |
 | `GET` | `/outpasses?scope=all\|actionable` | student, parent, warden, admin | Passes the caller can see; `actionable` returns the ones waiting on them |
 | `POST` | `/outpasses` | student | Request a pass |
@@ -289,15 +333,14 @@ answers are in [`docs/store-listing.md`](docs/store-listing.md).
   runtime. `prisma migrate` still uses Prisma's schema engine.
 - **Camera scanning** uses `expo-camera`. On web, and wherever camera access is
   denied, the guard can look a student up by roll number instead.
-- **Visitor passes** are shared as a code through the system share sheet. A
-  hosted link that shows the QR to the visitor is a natural next step.
+- **Photos** are stored in Postgres (`user_photos`), resized to 480 px by the
+  app, so each is roughly 40–80 KB. Move them to object storage if a campus
+  grows past tens of thousands of students.
 
 ## Follow-ups (not built)
 
-- Push and SMS notifications to parents, wardens and hosts.
 - Offline QR verification at the gate (Ed25519-signed tokens).
-- Photo capture at the gate.
-- Bulk student import (CSV).
-- Refresh-token rotation and password reset.
-- Multi-campus tenancy.
+- SMS alerts to parents (phone sign-in codes already go by SMS).
+- Multi-campus tenancy (one server per college today).
+- Helpdesk, dues and the other ideas in [`docs/mygate-learnings.md`](docs/mygate-learnings.md).
 - CI/CD.

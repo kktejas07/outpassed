@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma";
 import { outpassInclude, toGateEventDto, type OutpassWithRelations } from "../lib/dto";
 import { guardianIds, notifyLater } from "../lib/notify";
 import { clock } from "../lib/time";
+import { photoUrl } from "../lib/photo";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
@@ -34,7 +35,7 @@ function outpassVerdict(row: OutpassWithRelations, now: Date): GateVerdict {
   const detail = [profile?.hostel, profile?.room ? `Room ${profile.room}` : null, profile?.rollNo]
     .filter(Boolean)
     .join(" · ");
-  const person = { name: row.student.name, detail: detail || "Student" };
+  const person = { name: row.student.name, detail: detail || "Student", photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt) };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "OUTPASS", subjectId: row.id, person };
   }
@@ -60,7 +61,7 @@ function visitVerdict(
   now: Date,
 ): GateVerdict {
   const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now });
-  const person = { name: visit.visitorName, detail: `Visiting ${visit.host.name} · ${visit.purpose}` };
+  const person = { name: visit.visitorName, detail: `Visiting ${visit.host.name} · ${visit.purpose}`, photoUrl: null };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "VISIT", subjectId: visit.id, person };
   }

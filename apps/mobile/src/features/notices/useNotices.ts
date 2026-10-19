@@ -1,5 +1,5 @@
 import type { NoticeAudience, NoticeDto } from "@outpassed/shared";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useAction, useQuery } from "../../lib/useQuery";
@@ -21,7 +21,26 @@ export function useNotices() {
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<NoticeAudience>("STUDENTS");
   const [pinned, setPinned] = useState(false);
-  const post = useAction((t) => api.postNotice(t, { title: title.trim(), body: body.trim(), audience, pinned }));
+  // Which hostel a notice goes to. Wardens assigned to hostels pick from theirs.
+  const [hostelOptions, setHostelOptions] = useState<{ value: string; label: string }[]>([]);
+  const [hostelId, setHostelId] = useState("");
+  useEffect(() => {
+    if (!canPost || !token) return;
+    api
+      .adminHostels(token)
+      .then((all) => {
+        const mine = user?.role === "WARDEN" ? all.filter((h) => h.wardens.some((w) => w.id === user.id)) : [];
+        const opts = mine.length
+          ? mine.map((h) => ({ value: h.id, label: h.name }))
+          : all.length
+            ? [{ value: "", label: "All hostels" }, ...all.map((h) => ({ value: h.id, label: h.name }))]
+            : [];
+        setHostelOptions(opts);
+        setHostelId(opts[0]?.value ?? "");
+      })
+      .catch(() => setHostelOptions([]));
+  }, [canPost, token, user?.id, user?.role]);
+  const post = useAction((t) => api.postNotice(t, { title: title.trim(), body: body.trim(), audience, pinned, hostelId: hostelId || undefined }));
   const list = q.data?.notices ?? [];
 
   return {
@@ -30,13 +49,14 @@ export function useNotices() {
     unread: q.data?.unread ?? 0,
     canPost,
     title, setTitle, body, setBody, audience, setAudience, pinned, setPinned,
+    hostelOptions, hostelId, setHostelId,
     posting: post.busy,
     postError: post.error,
     valid: title.trim().length >= 3 && body.trim().length > 0,
     post: async () => {
       const r = await post.run();
       if (r) {
-        ribbon.show({ tone: "success", title: "Notice posted", body: `${audiences.find((a) => a.value === audience)?.label} have been alerted.`, celebrate: true });
+        ribbon.show({ tone: "success", title: "Notice posted", body: `${audiences.find((a) => a.value === audience)?.label}${hostelId ? ` in ${hostelOptions.find((h) => h.value === hostelId)?.label}` : ""} have been alerted.`, celebrate: true });
         setTitle(""); setBody(""); setPinned(false);
         void q.reload();
         return true;

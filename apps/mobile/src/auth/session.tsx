@@ -7,9 +7,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api } from "../api/client";
+import { api, ApiError, setTokenRenewer } from "../api/client";
 import { registerForPush, unregisterPush } from "../notifications/push";
-import { clearToken, getToken, setToken } from "./tokenStore";
+import {
+  clearRefreshToken,
+  clearToken,
+  getRefreshToken,
+  getToken,
+  setRefreshToken,
+  setToken,
+} from "./tokenStore";
 
 export type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -19,7 +26,7 @@ type SessionValue = {
   token: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: RegisterInput) => Promise<void>;
-  /** Starts a session from an auth response (sign-in, sign-up, password reset). */
+  /** Starts a session from an auth response (sign-in, sign-up, OTP, setup, password reset). */
   adopt: (res: AuthResponse) => Promise<void>;
   /** Re-fetches the current user (e.g. after a profile change). */
   refresh: () => Promise<void>;
@@ -28,10 +35,77 @@ type SessionValue = {
 
 const SessionContext = createContext<SessionValue | null>(null);
 
+// --- Token renewal, shared by every request (outside React so it works from any call) ---
+
+let currentToken: string | null = null;
+let renewing: Promise<string | null> | null = null;
+const listeners = new Set<(res: AuthResponse | null) => void>();
+
+async function saveSession(res: AuthResponse) {
+  currentToken = res.accessToken;
+  await setToken(res.accessToken);
+  await setRefreshToken(res.refreshToken);
+}
+
+async function wipeSession() {
+  currentToken = null;
+  await clearToken();
+  await clearRefreshToken();
+}
+
+/**
+ * Swaps the refresh token for a new pair. Several requests failing at once
+ * share one renewal, and a request that failed with an already-replaced
+ * token just retries with the new one.
+ */
+async function renew(failedToken: string): Promise<string | null> {
+  if (currentToken && currentToken !== failedToken) return currentToken;
+  renewing ??= (async () => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) return null;
+      const res = await api.refresh(refreshToken);
+      await saveSession(res);
+      listeners.forEach((l) => l(res));
+      return res.accessToken;
+    } catch (err) {
+      // Only a rejected refresh token ends the session; a network blip doesn't.
+      if (err instanceof ApiError && err.status === 401) {
+        await wipeSession();
+        listeners.forEach((l) => l(null));
+      }
+      return null;
+    } finally {
+      renewing = null;
+    }
+  })();
+  return renewing;
+}
+
+setTokenRenewer(renew);
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [user, setUser] = useState<UserDto | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
+
+  // Follow renewals (and sessions that ended) made by any request.
+  useEffect(() => {
+    const onChange = (res: AuthResponse | null) => {
+      if (res) {
+        setTokenState(res.accessToken);
+        setUser(res.user);
+      } else {
+        setTokenState(null);
+        setUser(null);
+        setStatus("unauthenticated");
+      }
+    };
+    listeners.add(onChange);
+    return () => {
+      listeners.delete(onChange);
+    };
+  }, []);
 
   // Restore an existing session on launch.
   useEffect(() => {
@@ -43,16 +117,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setStatus("unauthenticated");
         return;
       }
+      currentToken = stored;
       try {
+        // An expired access token is renewed inside the request.
         const { user } = await api.me(stored);
         if (!cancelled) {
-          setTokenState(stored);
+          const active = currentToken ?? stored;
+          setTokenState(active);
           setUser(user);
           setStatus("authenticated");
-          void registerForPush(stored);
+          void registerForPush(active);
         }
-      } catch {
-        await clearToken();
+      } catch (err) {
+        // Keep the stored session when offline, so it works again next launch.
+        if (!(err instanceof ApiError && err.code === "NETWORK")) await wipeSession();
         if (!cancelled) setStatus("unauthenticated");
       }
     })();
@@ -64,7 +142,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SessionValue>(() => {
     async function adopt(res: AuthResponse) {
-      await setToken(res.accessToken);
+      await saveSession(res);
       setTokenState(res.accessToken);
       setUser(res.user);
       setStatus("authenticated");
@@ -75,8 +153,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       user,
       token,
       async signIn(email, password) {
-        const res = await api.login(email, password);
-        await adopt(res);
+        await adopt(await api.login(email, password));
       },
       async signUp(input) {
         await adopt(await api.register(input));
@@ -88,8 +165,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       },
       adopt,
       async signOut() {
-        if (token) await unregisterPush(token);
-        await clearToken();
+        if (token) await unregisterPush(token).catch(() => undefined);
+        const refreshToken = await getRefreshToken();
+        if (refreshToken) await api.logout(refreshToken).catch(() => undefined);
+        await wipeSession();
         setTokenState(null);
         setUser(null);
         setStatus("unauthenticated");

@@ -29,8 +29,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Outpass uses the camera to scan gate passes.",
+          "cameraPermission": "Outpass uses the camera to scan gate passes and to take your profile photo.",
           "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Outpass uses your photos to set your profile picture, which guards check at the gate."
         }
       ]
     ],

@@ -19,6 +19,11 @@ says how to tell it worked.
    | `CAMPUS_NAME` / `CAMPUS_ADDRESS` | the pilot campus, shown on visitor passes |
    | `SMTP_URL` / `MAIL_FROM` | your mail provider; **required**, password reset fails without it in production |
    | `ADULT_PARENT_MODE` | `approve` or `notify_only` |
+   | `SETUP_TOKEN` | `openssl rand -base64 24`; needed once for first-time setup, remove afterwards |
+   | `SMS_PROVIDER` | `msg91` (India) or `twilio`; **required** for phone sign-in in production |
+   | `MSG91_AUTH_KEY` / `MSG91_TEMPLATE_ID` | MSG91 key and a DLT-approved OTP template with an `otp` variable |
+   | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | if using Twilio instead |
+   | `JWT_EXPIRES_IN` | leave at `15m`; the app renews tokens itself |
 
    Attach `api.outpassed.studentalumni.ai` on port 3000. Migrations run on boot.
    *Check:* `https://api.outpassed.studentalumni.ai/health` returns `{"status":"ok"}`.
@@ -29,9 +34,17 @@ says how to tell it worked.
 4. **DNS**: an A record for both hostnames pointing at the Dokploy server.
    `api.outpassed.studentalumni.ai` needs its own record (a `*.studentalumni.ai`
    wildcard doesn't cover it).
-5. **Accounts**: create the first admin directly in the database or by running
-   the seed once on a staging copy, then use **People → Staff** in the app to add
-   wardens and guards. Don't run the demo seed against the pilot database.
+5. **First-time setup**: open `https://outpassed.studentalumni.ai/app`. With no
+   admin yet, it shows **Set up Outpass**: enter the college name and address,
+   your admin account, the hostels and the `SETUP_TOKEN`. Then remove
+   `SETUP_TOKEN` from the API settings. Don't run the demo seed against the
+   pilot database.
+6. **People**: in **People → Staff** add wardens and guards; in
+   **People → Hostels** tick which hostels each warden covers; in
+   **People → Import students** load the class list CSV (preview first).
+   Students sign in with a texted code, or set a password with "Forgot password".
+7. **Photos**: ask students to add a photo on the **Me** tab before the pilot
+   starts (or upload them from the college ID database in **People**).
 
 ## 2. Connect push notifications
 

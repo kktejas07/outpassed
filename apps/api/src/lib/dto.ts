@@ -1,4 +1,4 @@
-import type { Prisma, StudentProfile, User } from "@prisma/client";
+import type { Prisma, StudentProfile, User, UserPhoto } from "@prisma/client";
 import type {
   ApprovalDto,
   GateEventDto,
@@ -7,6 +7,7 @@ import type {
   VisitDto,
 } from "@outpassed/shared";
 import { isOverdue } from "../domain/outpassFlow";
+import { photoUrl } from "./photo";
 import { passUrl } from "./visitCode";
 
 /**
@@ -16,7 +17,7 @@ import { passUrl } from "./visitCode";
 
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
-export function toUserDto(user: User & { student?: StudentProfile | null }): UserDto {
+export function toUserDto(user: User & { student?: StudentProfile | null; photo?: Pick<UserPhoto, "updatedAt"> | null }): UserDto {
   return {
     id: user.id,
     email: user.email,
@@ -28,18 +29,20 @@ export function toUserDto(user: User & { student?: StudentProfile | null }): Use
       ? {
           rollNo: user.student.rollNo,
           hostel: user.student.hostel,
+          hostelId: user.student.hostelId,
           room: user.student.room,
           dateOfBirth: user.student.dateOfBirth
             ? user.student.dateOfBirth.toISOString().slice(0, 10)
             : null,
         }
       : null,
+    photoUrl: photoUrl(user.id, user.photo?.updatedAt),
   };
 }
 
 /** The include every outpass query uses, so the DTO always has what it needs. */
 export const outpassInclude = {
-  student: { include: { student: true } },
+  student: { include: { student: true, photo: { select: { updatedAt: true } } } },
   approvals: { include: { approver: true }, orderBy: { createdAt: "asc" } },
   extensions: { include: { decidedBy: true }, orderBy: { createdAt: "desc" }, take: 1 },
 } satisfies Prisma.OutpassInclude;
@@ -65,6 +68,7 @@ export function toOutpassDto(row: OutpassWithRelations, now: Date = new Date()):
       rollNo: row.student.student?.rollNo ?? null,
       hostel: row.student.student?.hostel ?? null,
       room: row.student.student?.room ?? null,
+      photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt),
     },
     approvals: row.approvals.map(
       (a): ApprovalDto => ({

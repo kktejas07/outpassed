@@ -1,10 +1,21 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from "react-native";
+import { photoSrc } from "../api/client";
 import { color, font, radius } from "../theme/tokens";
 import { FadeIn } from "./motion";
 import { Text } from "./Text";
 
-export function Avatar({ name, size = 40, tone = "indigo" }: { name: string; size?: number; tone?: "indigo" | "accent" }) {
+export function Avatar({ name, size = 40, tone = "indigo", photoUrl }: { name: string; size?: number; tone?: "indigo" | "accent"; photoUrl?: string | null }) {
+  const src = photoSrc(photoUrl);
+  if (src) {
+    return (
+      <Image
+        source={{ uri: src }}
+        accessibilityLabel={`Photo of ${name}`}
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color.indigoTint, borderWidth: tone === "accent" ? 1.5 : 0, borderColor: color.accentFrame }}
+      />
+    );
+  }
   const initials = name
     .replace(/\(.*?\)/g, "")
     .replace(/[^\p{L}\s]/gu, "")

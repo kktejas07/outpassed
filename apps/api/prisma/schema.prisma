@@ -77,6 +77,8 @@ model User {
   passwordHash String
   name         String
   phone        String?
+  /// Phone in +<country><number> form, for OTP sign-in lookups.
+  phoneNormalized String?
   role         Role     @default(STUDENT)
   createdAt    DateTime @default(now())
 
@@ -100,8 +102,12 @@ model User {
   sosResolved     SosAlert[]      @relation("SosResolved")
   notices         Notice[]
   noticeReads     NoticeRead[]
+  photo           UserPhoto?
+  wardenHostels   WardenHostel[]
+  refreshTokens   RefreshToken[]
 
   @@index([role])
+  @@index([phoneNormalized])
   @@map("users")
 }
 
@@ -109,10 +115,14 @@ model StudentProfile {
   userId      String    @id
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   rollNo      String?   @unique
+  /// Hostel name, kept in step with `hostelId` for display.
   hostel      String?
+  hostelId    String?
+  hostelRef   Hostel?   @relation(fields: [hostelId], references: [id], onDelete: SetNull)
   room        String?
   dateOfBirth DateTime? @db.Date
 
+  @@index([hostelId])
   @@map("student_profiles")
 }
 
@@ -372,6 +382,9 @@ model Notice {
   body      String
   audience  NoticeAudience @default(STUDENTS)
   pinned    Boolean        @default(false)
+  /// Only students/parents of this hostel see it; null means every hostel.
+  hostelId  String?
+  hostel    Hostel?        @relation(fields: [hostelId], references: [id], onDelete: SetNull)
   authorId  String
   author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   createdAt DateTime       @default(now())
@@ -391,4 +404,80 @@ model NoticeRead {
 
   @@id([noticeId, userId])
   @@map("notice_reads")
+}
+
+/// The college or school this deployment serves (one row).
+model Institution {
+  id        Int      @id @default(1)
+  name      String
+  address   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("institution")
+}
+
+model Hostel {
+  id        String           @id @default(uuid())
+  name      String           @unique
+  createdAt DateTime         @default(now())
+  students  StudentProfile[]
+  wardens   WardenHostel[]
+  notices   Notice[]
+
+  @@map("hostels")
+}
+
+/// Which hostels a warden looks after. A warden with none sees every hostel.
+model WardenHostel {
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostelId String
+  hostel   Hostel @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+
+  @@id([userId, hostelId])
+  @@index([hostelId])
+  @@map("warden_hostels")
+}
+
+/// Profile photo shown to guards at the gate. Small JPEG stored in the database.
+model UserPhoto {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Bytes
+  mime      String
+  updatedAt DateTime @updatedAt
+
+  @@map("user_photos")
+}
+
+/// SMS sign-in code. Only the hash is stored.
+model OtpCode {
+  id        String    @id @default(uuid())
+  phone     String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@map("otp_codes")
+}
+
+/// Long-lived sign-in that renews short access tokens. Rotated on every use;
+/// reusing an old one revokes the whole family.
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  familyId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
 }

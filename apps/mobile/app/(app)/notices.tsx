@@ -35,6 +35,7 @@ export default function Notices() {
             <Field label="Message" value={vm.body} onChangeText={vm.setBody} multiline placeholder="What students or parents need to know" />
             <Text variant="eyebrow">Send to</Text>
             <Chips options={audiences} value={vm.audience} onChange={vm.setAudience} />
+            {vm.hostelOptions.length > 1 ? <Chips options={vm.hostelOptions} value={vm.hostelId} onChange={vm.setHostelId} /> : null}
             <View style={styles.pinRow}>
               <View style={{ flex: 1 }}>
                 <Text variant="label">Pin to the top</Text>
@@ -72,7 +73,7 @@ export default function Notices() {
               <Text variant="body" numberOfLines={expanded ? undefined : 2} style={{ color: color.ink }}>{n.body}</Text>
               <View style={styles.meta}>
                 <Text variant="caption">{n.authorName} · {relative(n.createdAt)}</Text>
-                {vm.canPost ? <Pill label={audiences.find((a) => a.value === n.audience)!.label} tone="indigo" /> : null}
+                {vm.canPost ? <Pill label={`${audiences.find((a) => a.value === n.audience)!.label}${n.hostelName ? ` · ${n.hostelName}` : ""}`} tone="indigo" /> : null}
               </View>
               {vm.canPost && n.receipts ? (
                 <View style={{ gap: 6 }}>

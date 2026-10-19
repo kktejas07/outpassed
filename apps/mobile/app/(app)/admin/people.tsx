@@ -1,5 +1,10 @@
 import type { UserDto } from "@outpassed/shared";
+import { router } from "expo-router";
 import { useState } from "react";
+import { api, errorMessage } from "../../../src/api/client";
+import { useSession } from "../../../src/auth/session";
+import { pickPhoto } from "../../../src/features/photo/pickPhoto";
+import { useRibbon } from "../../../src/ui/Ribbon";
 import { StyleSheet, View } from "react-native";
 import { useAddStaff, useLinkGuardian, usePeople } from "../../../src/features/admin/useAdmin";
 import { color } from "../../../src/theme/tokens";
@@ -60,8 +65,30 @@ function LinkParent({ student, onDone }: { student: UserDto; onDone: () => void 
 
 export default function People() {
   const vm = usePeople();
+  const { token } = useSession();
+  const ribbon = useRibbon();
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState<string | null>(null);
+  const [photoFor, setPhotoFor] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  /** For students who can't add their own, e.g. from the college ID database. */
+  async function addPhoto(u: UserDto) {
+    if (!token) return;
+    setPhotoError(null);
+    try {
+      const image = await pickPhoto("library");
+      if (!image) return;
+      setPhotoFor(u.id);
+      await api.uploadUserPhoto(token, u.id, image);
+      await vm.reload();
+      ribbon.show({ tone: "success", title: `Photo saved for ${u.name}` });
+    } catch (err) {
+      setPhotoError(errorMessage(err, "Couldn't save the photo"));
+    } finally {
+      setPhotoFor(null);
+    }
+  }
 
   return (
     <Screen
@@ -71,6 +98,11 @@ export default function People() {
       onRefresh={vm.refresh}
       right={<Button compact tone={adding ? "outline" : "accent"} icon={adding ? "close" : "add"} label={adding ? "Close" : "Staff"} onPress={() => setAdding((a) => !a)} />}
     >
+      <View style={styles.tools}>
+        <Button compact tone="outline" icon="cloud-upload-outline" label="Import students" style={{ flex: 1 }} onPress={() => router.push("/import")} />
+        <Button compact tone="outline" icon="business-outline" label="Hostels" style={{ flex: 1 }} onPress={() => router.push("/hostels")} />
+      </View>
+      {photoError ? <ErrorNote message={photoError} /> : null}
       {adding ? <AddStaff onDone={() => { setAdding(false); void vm.reload(); }} /> : null}
       <Chips options={roleFilters.map((r) => ({ value: r.value, label: r.label }))} value={vm.role} onChange={vm.setRole} />
       {vm.error ? <ErrorNote message={vm.error} onRetry={vm.refresh} /> : null}
@@ -80,7 +112,7 @@ export default function People() {
         <FadeIn key={u.id} index={i}>
           <Card>
             <View style={styles.row}>
-              <Avatar name={u.name} size={38} tone={u.role === "STUDENT" ? "accent" : "indigo"} />
+              <Avatar name={u.name} size={38} tone={u.role === "STUDENT" ? "accent" : "indigo"} photoUrl={u.photoUrl} />
               <View style={{ flex: 1 }}>
                 <Text variant="label">{u.name}</Text>
                 <Text variant="caption" numberOfLines={1}>{u.student?.rollNo ? `${u.student.rollNo} · ` : ""}{u.email}</Text>
@@ -91,7 +123,18 @@ export default function People() {
               linking === u.id ? (
                 <LinkParent student={u} onDone={() => { setLinking(null); }} />
               ) : (
-                <Button compact tone="ghost" label="Link a parent" style={{ alignSelf: "flex-start", marginTop: 6, paddingHorizontal: 0 }} onPress={() => setLinking(u.id)} />
+                <View style={styles.actions}>
+                  <Button compact tone="ghost" label="Link a parent" style={{ paddingHorizontal: 0 }} onPress={() => setLinking(u.id)} />
+                  <Button
+                    compact
+                    tone="ghost"
+                    icon={u.photoUrl ? "image-outline" : "camera-outline"}
+                    label={u.photoUrl ? "Change photo" : "Add photo"}
+                    loading={photoFor === u.id}
+                    style={{ paddingHorizontal: 0 }}
+                    onPress={() => void addPhoto(u)}
+                  />
+                </View>
               )
             ) : null}
           </Card>
@@ -103,5 +146,7 @@ export default function People() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
+  tools: { flexDirection: "row", gap: 10 },
+  actions: { flexDirection: "row", gap: 18, marginTop: 6 },
   notice: { padding: 12, borderRadius: 14, backgroundColor: color.greenSoft },
 });

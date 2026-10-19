@@ -14,7 +14,8 @@ import { applyDecision, canCancel, FlowError, initialStatus } from "../domain/ou
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { outpassInclude, toOutpassDto } from "../lib/dto";
-import { guardianIds, notifyLater, wardenIds } from "../lib/notify";
+import { guardianIds, notifyLater } from "../lib/notify";
+import { studentInHostels, wardenScope, wardensFor } from "../lib/hostels";
 import { when } from "../lib/time";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
@@ -33,8 +34,11 @@ async function visibilityFilter(request: FastifyRequest): Promise<Prisma.Outpass
       return { studentId: { in: wards.map((w) => w.studentId) } };
     }
     case "WARDEN":
-    case "ADMIN":
-      return {};
+    case "ADMIN": {
+      // Wardens assigned to hostels see only their students.
+      const scope = await wardenScope(sub, role);
+      return scope ? { student: studentInHostels(scope) } : {};
+    }
     default:
       throw new HttpError(403, "FORBIDDEN", "You do not have access to outpasses");
   }
@@ -128,7 +132,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
         data: { outpassId: row.id },
       });
     } else {
-      notifyLater(await wardenIds(), {
+      notifyLater(await wardensFor(studentId), {
         kind: "OUTPASS_NEEDS_WARDEN",
         title: `New outpass from ${name}`,
         body: `${summary}. Waiting for your approval.`,
@@ -194,7 +198,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
         body: `Your pass to ${updated.destination} is now with the warden.`,
         data,
       });
-      notifyLater(await wardenIds(), {
+      notifyLater(await wardensFor(updated.studentId), {
         kind: "OUTPASS_NEEDS_WARDEN",
         title: `${name}'s outpass is ready for you`,
         body: `Parent approved · ${updated.destination} · ${when(updated.leaveAt)}.`,
@@ -267,7 +271,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     });
     const updated = await prisma.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
     const name = updated.student.name;
-    notifyLater(await wardenIds(), {
+    notifyLater(await wardensFor(updated.studentId), {
       kind: "EXTENSION_REQUESTED",
       title: `${name} is asking to return later`,
       body: `Wants until ${when(requested)} instead of ${when(current.returnBy)}: ${body.reason}`,

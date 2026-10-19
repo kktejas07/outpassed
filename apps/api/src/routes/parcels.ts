@@ -8,9 +8,10 @@ import { notifyLater } from "../lib/notify";
 import { prisma } from "../lib/prisma";
 import { clock } from "../lib/time";
 import { requireRole } from "../plugins/auth";
+import { photoUrl } from "../lib/photo";
 import { HttpError } from "../plugins/errorHandler";
 
-const parcelInclude = { student: { include: { student: true } }, loggedBy: true } satisfies Prisma.ParcelInclude;
+const parcelInclude = { student: { include: { student: true, photo: { select: { updatedAt: true } } } }, loggedBy: true } satisfies Prisma.ParcelInclude;
 type ParcelRow = Prisma.ParcelGetPayload<{ include: typeof parcelInclude }>;
 
 function toParcelDto(row: ParcelRow, showCode: boolean): ParcelDto {
@@ -26,6 +27,7 @@ function toParcelDto(row: ParcelRow, showCode: boolean): ParcelDto {
       rollNo: row.student.student?.rollNo ?? null,
       hostel: row.student.student?.hostel ?? null,
       room: row.student.student?.room ?? null,
+      photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt),
     },
     loggedByName: row.loggedBy.name,
     collectedAt: row.collectedAt?.toISOString() ?? null,
