@@ -2,17 +2,25 @@ import type { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   createOutpassSchema,
+  extensionDecisionSchema,
+  extensionRequestSchema,
   idParamSchema,
   outpassDecisionSchema,
   outpassListQuerySchema,
   type QrTokenResponse,
 } from "@outpassed/shared";
 import { env } from "../env";
-import { applyDecision, canCancel, FlowError, initialStatus } from "../domain/outpassFlow";
+import { applyDecision, canCancel, FlowError, initialStatus, statusAfterFaculty } from "../domain/outpassFlow";
+import { academicContacts, hodOf } from "../lib/academic";
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { outpassInclude, toOutpassDto } from "../lib/dto";
+import { guardianIds, notifyLater } from "../lib/notify";
+import { studentInHostels, wardenScope, wardensFor } from "../lib/hostels";
+import { when } from "../lib/time";
 import { requireRole } from "../plugins/auth";
+import { audit } from "../lib/audit";
+import { outpassToken } from "../lib/passes";
 import { HttpError } from "../plugins/errorHandler";
 
 /** Which outpasses the caller is allowed to see. */
@@ -28,9 +36,22 @@ async function visibilityFilter(request: FastifyRequest): Promise<Prisma.Outpass
       });
       return { studentId: { in: wards.map((w) => w.studentId) } };
     }
+    case "FACULTY": {
+      // Passes they were asked to approve, plus (for an HOD) every pass from their department.
+      const heads = await prisma.department.findMany({ where: { hodId: sub }, select: { id: true } });
+      return {
+        OR: [
+          { facultyId: sub },
+          ...(heads.length ? [{ student: { student: { departmentId: { in: heads.map((h) => h.id) } } } }] : []),
+        ],
+      };
+    }
     case "WARDEN":
-    case "ADMIN":
-      return {};
+    case "ADMIN": {
+      // Wardens assigned to hostels see only their students.
+      const scope = await wardenScope(sub, role);
+      return scope ? { student: studentInHostels(scope) } : {};
+    }
     default:
       throw new HttpError(403, "FORBIDDEN", "You do not have access to outpasses");
   }
@@ -54,8 +75,16 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     if (query.scope === "actionable") {
       const role = request.user.role;
       if (role === "PARENT") where.status = "PENDING_PARENT";
-      else if (role === "WARDEN" || role === "ADMIN") {
-        where.status = { in: ["PENDING_WARDEN", "PENDING_PARENT"] };
+      else if (role === "FACULTY") {
+        delete where.OR;
+        where.status = "PENDING_FACULTY";
+        where.facultyId = request.user.sub;
+      } else if (role === "WARDEN" || role === "ADMIN") {
+        // New requests, plus students out who asked to come back later.
+        where.OR = [
+          { status: { in: ["PENDING_WARDEN", "PENDING_PARENT", "PENDING_FACULTY"] } },
+          { status: { in: ["APPROVED", "OUT"] }, extensions: { some: { status: "PENDING" } } },
+        ];
       } else where.status = { in: [] };
     }
 
@@ -75,7 +104,7 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     const studentId = request.user.sub;
 
     const active = await prisma.outpass.count({
-      where: { studentId, status: { in: ["PENDING_PARENT", "PENDING_WARDEN", "APPROVED", "OUT"] } },
+      where: { studentId, status: { in: ["PENDING_FACULTY", "PENDING_PARENT", "PENDING_WARDEN", "APPROVED", "OUT"] } },
     });
     if (active > 0) {
       throw new HttpError(
@@ -90,11 +119,17 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       prisma.guardianship.count({ where: { studentId } }),
     ]);
 
+    if (body.facultyId) {
+      const f = await prisma.user.findUnique({ where: { id: body.facultyId } });
+      if (!f || f.role !== "FACULTY") throw new HttpError(400, "INVALID_FACULTY", "Pick the faculty member who gave you permission");
+    }
     const status = initialStatus({
       dateOfBirth: profile?.dateOfBirth ?? null,
       hasGuardian: guardianCount > 0,
       adultParentMode: env.ADULT_PARENT_MODE,
       now: new Date(),
+      facultyId: body.facultyId ?? null,
+      type: body.type,
     });
 
     const row = await prisma.outpass.create({
@@ -106,9 +141,60 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
         leaveAt: new Date(body.leaveAt),
         returnBy: new Date(body.returnBy),
         status,
+        facultyId: body.facultyId ?? null,
       },
       include: outpassInclude,
     });
+
+    const name = row.student.name;
+    const summary = `${row.destination} · ${when(row.leaveAt)} to ${when(row.returnBy)}`;
+    const data = { outpassId: row.id };
+    const hod = await hodOf(studentId);
+    if (row.type === "EMERGENCY") {
+      // Everyone hears at once; the warden decides.
+      notifyLater(await wardensFor(studentId), {
+        kind: "OUTPASS_NEEDS_WARDEN",
+        title: `Emergency exit: ${name}`,
+        body: `${summary}. ${row.reason}`,
+        data,
+      });
+      notifyLater([...(await guardianIds(studentId)), ...(await academicContacts(studentId, row.facultyId))], {
+        kind: "OUTPASS_EMERGENCY",
+        title: `${name} has asked for an emergency exit`,
+        body: `${summary}. Reason: ${row.reason}. The warden is deciding now.`,
+        data,
+      });
+    } else if (status === "PENDING_FACULTY") {
+      notifyLater([row.facultyId!], {
+        kind: "OUTPASS_NEEDS_FACULTY",
+        title: `${name} needs your permission to go out`,
+        body: `${typeLabel(row.type)} · ${summary}. Tap to approve or reject.`,
+        data,
+      });
+    } else if (status === "PENDING_PARENT") {
+      notifyLater(await guardianIds(studentId), {
+        kind: "OUTPASS_NEEDS_PARENT",
+        title: `${name} is asking to go out`,
+        body: `${summary}. Tap to approve or reject.`,
+        data: { outpassId: row.id },
+      });
+    } else {
+      notifyLater(await wardensFor(studentId), {
+        kind: "OUTPASS_NEEDS_WARDEN",
+        title: `New outpass from ${name}`,
+        body: `${summary}. Waiting for your approval.`,
+        data: { outpassId: row.id },
+      });
+    }
+    // The HOD sees every pass from their department (unless they're the one approving).
+    if (hod && hod !== row.facultyId && row.type !== "EMERGENCY") {
+      notifyLater([hod], {
+        kind: "OUTPASS_FOR_HOD",
+        title: `${name} asked to go out`,
+        body: `${typeLabel(row.type)} · ${summary}${row.faculty ? ` · permission from ${row.faculty.name}` : ""}.`,
+        data,
+      });
+    }
     return reply.status(201).send(toOutpassDto(row));
   });
 
@@ -118,11 +204,18 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/outpasses/:id/decision", async (request) => {
-    requireRole(request, "PARENT", "WARDEN", "ADMIN");
+    requireRole(request, "PARENT", "WARDEN", "ADMIN", "FACULTY");
     const { id } = idParamSchema.parse(request.params);
     const body = outpassDecisionSchema.parse(request.body);
     const current = await findVisibleOutpass(request, id);
 
+    const profile = await prisma.studentProfile.findUnique({ where: { userId: current.studentId } });
+    const afterFaculty = statusAfterFaculty({
+      dateOfBirth: profile?.dateOfBirth ?? null,
+      hasGuardian: (await prisma.guardianship.count({ where: { studentId: current.studentId } })) > 0,
+      adultParentMode: env.ADULT_PARENT_MODE,
+      now: new Date(),
+    });
     const isGuardian =
       request.user.role === "PARENT" &&
       (await prisma.guardianship.count({
@@ -135,6 +228,8 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       isGuardian,
       decision: body.decision,
       reason: body.reason ?? null,
+      isAssignedFaculty: request.user.role === "FACULTY" && current.facultyId === request.user.sub,
+      afterFaculty,
     });
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -159,6 +254,66 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
       return tx.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
     });
 
+    const name = updated.student.name;
+    const data = { outpassId: id };
+    await audit(
+      request,
+      result.override ? "OUTPASS_OVERRIDE" : body.decision === "APPROVE" ? "OUTPASS_APPROVED" : "OUTPASS_REJECTED",
+      `${result.override ? "Overrode parent step and approved" : body.decision === "APPROVE" ? "Approved" : "Rejected"} ${name}'s outpass to ${updated.destination}${body.reason ? ` — ${body.reason}` : ""}`,
+      { type: "outpass", id },
+      { step: result.step, reason: body.reason ?? null },
+    );
+    const byFaculty = result.step === "FACULTY" && !result.override;
+    if (byFaculty && result.nextStatus === "PENDING_PARENT") {
+      notifyLater([updated.studentId], {
+        kind: "OUTPASS_FACULTY_APPROVED",
+        title: `${updated.faculty?.name ?? "Your faculty"} approved`,
+        body: `Your pass to ${updated.destination} is now with your parent.`,
+        data,
+      });
+      notifyLater(await guardianIds(updated.studentId), {
+        kind: "OUTPASS_NEEDS_PARENT",
+        title: `${name} is asking to go out`,
+        body: `${typeLabel(updated.type)} · ${updated.destination} · ${when(updated.leaveAt)} to ${when(updated.returnBy)}. ${updated.faculty?.name ?? "Their faculty"} has approved. Tap to approve or reject.`,
+        data,
+      });
+    } else if (result.nextStatus === "PENDING_WARDEN") {
+      notifyLater([updated.studentId], {
+        kind: byFaculty ? "OUTPASS_FACULTY_APPROVED" : "OUTPASS_PARENT_APPROVED",
+        title: byFaculty ? `${updated.faculty?.name ?? "Your faculty"} approved` : "Your parent approved",
+        body: `Your pass to ${updated.destination} is now with the warden.`,
+        data,
+      });
+      notifyLater(await wardensFor(updated.studentId), {
+        kind: "OUTPASS_NEEDS_WARDEN",
+        title: `${name}'s outpass is ready for you`,
+        body: `${byFaculty ? `${updated.faculty?.name ?? "Faculty"} approved` : "Parent approved"} · ${updated.destination} · ${when(updated.leaveAt)}.`,
+        data,
+      });
+    } else if (result.nextStatus === "APPROVED") {
+      notifyLater([updated.studentId], {
+        kind: "OUTPASS_APPROVED",
+        title: "Outpass approved",
+        body: `You're cleared for ${updated.destination} from ${when(updated.leaveAt)}. Show your gate pass at the gate.`,
+        data,
+      });
+      if (result.override) {
+        notifyLater(await guardianIds(updated.studentId), {
+          kind: "OUTPASS_APPROVED",
+          title: `The warden approved ${name}'s outpass`,
+          body: `${updated.destination} · ${when(updated.leaveAt)}. Reason: ${body.reason ?? ""}`.trim(),
+          data,
+        });
+      }
+    } else if (result.nextStatus === "REJECTED") {
+      notifyLater([updated.studentId], {
+        kind: "OUTPASS_REJECTED",
+        title: "Outpass not approved",
+        body: `Your request for ${updated.destination} was rejected${body.reason ? `: ${body.reason}` : "."}`,
+        data,
+      });
+    }
+
     return toOutpassDto(updated);
   });
 
@@ -178,6 +333,90 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     return toOutpassDto(updated);
   });
 
+  /** Student asks to come back later than the approved return time. */
+  app.post("/outpasses/:id/extend", async (request) => {
+    requireRole(request, "STUDENT");
+    const { id } = idParamSchema.parse(request.params);
+    const body = extensionRequestSchema.parse(request.body);
+    const current = await findVisibleOutpass(request, id);
+    if (current.status !== "OUT" && current.status !== "APPROVED") {
+      throw new FlowError("NOT_EXTENDABLE", "You can only ask for more time on an approved pass or while you're out");
+    }
+    const requested = new Date(body.requestedReturnBy);
+    if (requested <= current.returnBy) {
+      throw new HttpError(400, "INVALID_TIME", "Pick a time later than your current return time");
+    }
+    if (requested.getTime() - current.returnBy.getTime() > 7 * 24 * 3_600_000) {
+      throw new HttpError(400, "INVALID_TIME", "An extension can be at most 7 days. Request a new outpass instead.");
+    }
+    const pending = await prisma.outpassExtension.count({ where: { outpassId: id, status: "PENDING" } });
+    if (pending > 0) throw new FlowError("EXTENSION_PENDING", "You already asked for more time. Wait for the warden to reply.");
+
+    await prisma.outpassExtension.create({
+      data: { outpassId: id, previousReturnBy: current.returnBy, requestedReturnBy: requested, reason: body.reason },
+    });
+    const updated = await prisma.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
+    const name = updated.student.name;
+    notifyLater(await wardensFor(updated.studentId), {
+      kind: "EXTENSION_REQUESTED",
+      title: `${name} is asking to return later`,
+      body: `Wants until ${when(requested)} instead of ${when(current.returnBy)}: ${body.reason}`,
+      data: { outpassId: id },
+    });
+    notifyLater(await guardianIds(updated.studentId), {
+      kind: "EXTENSION_REQUESTED",
+      title: `${name} asked to return later`,
+      body: `New time requested: ${when(requested)}. The warden will decide.`,
+      data: { outpassId: id },
+    });
+    return toOutpassDto(updated);
+  });
+
+  app.post("/outpasses/:id/extend/decision", async (request) => {
+    requireRole(request, "WARDEN", "ADMIN");
+    const { id } = idParamSchema.parse(request.params);
+    const { decision } = extensionDecisionSchema.parse(request.body);
+    const ext = await prisma.outpassExtension.findFirst({ where: { outpassId: id, status: "PENDING" }, orderBy: { createdAt: "desc" } });
+    if (!ext) throw new FlowError("NOT_PENDING", "There's no pending request for more time");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const changed = await tx.outpassExtension.updateMany({
+        where: { id: ext.id, status: "PENDING" },
+        data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", decidedById: request.user.sub, decidedAt: new Date() },
+      });
+      if (changed.count === 0) throw new FlowError("CONFLICT", "This request was just decided");
+      if (decision === "APPROVE") {
+        // A new deadline gets its own overdue alert if missed.
+        await tx.outpass.update({ where: { id }, data: { returnBy: ext.requestedReturnBy, overdueAlertedAt: null } });
+      }
+      return tx.outpass.findUniqueOrThrow({ where: { id }, include: outpassInclude });
+    });
+
+    const approved = decision === "APPROVE";
+    await audit(
+      request,
+      approved ? "EXTENSION_APPROVED" : "EXTENSION_REJECTED",
+      `${approved ? "Gave" : "Declined"} ${updated.student.name} more time (${when(ext.previousReturnBy)} → ${when(ext.requestedReturnBy)})`,
+      { type: "outpass", id },
+    );
+    const body = approved
+      ? `You can return by ${when(ext.requestedReturnBy)}.`
+      : `Please return by ${when(ext.previousReturnBy)} as approved.`;
+    notifyLater([updated.studentId], {
+      kind: approved ? "EXTENSION_APPROVED" : "EXTENSION_REJECTED",
+      title: approved ? "More time approved" : "Extra time not approved",
+      body,
+      data: { outpassId: id },
+    });
+    notifyLater(await guardianIds(updated.studentId), {
+      kind: approved ? "EXTENSION_APPROVED" : "EXTENSION_REJECTED",
+      title: approved ? `${updated.student.name} can return later` : `${updated.student.name}'s request for more time was declined`,
+      body: approved ? `New return time: ${when(ext.requestedReturnBy)}.` : `Return time stays ${when(ext.previousReturnBy)}.`,
+      data: { outpassId: id },
+    });
+    return toOutpassDto(updated);
+  });
+
   /** A fresh short-lived code for the student to show at the gate. */
   app.get("/outpasses/:id/qr", async (request) => {
     requireRole(request, "STUDENT");
@@ -186,10 +425,24 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     if (current.status !== "APPROVED" && current.status !== "OUT") {
       throw new FlowError("NOT_APPROVED", "A QR code is only available once the pass is approved");
     }
+    const now = new Date();
+    const offline = outpassToken(current, { offline: true }, now);
     const response: QrTokenResponse = {
-      token: issueQrToken(id, "OUTPASS", env.QR_SECRET),
+      token: outpassToken(current, { offline: false }, now).token,
       expiresIn: env.QR_TTL_SECONDS,
+      offlineToken: offline.token,
+      offlineExpiresAt: new Date(offline.exp * 1000).toISOString(),
     };
     return response;
   });
 }
+
+const TYPE_LABEL: Record<string, string> = {
+  LOCAL: "Local outing",
+  HOME: "Going home / family trip",
+  MEDICAL: "Sick / medical",
+  EMERGENCY: "Emergency",
+  ACADEMIC: "Academic (internship, competition, event)",
+  PERSONAL: "Personal",
+};
+export const typeLabel = (t: string) => TYPE_LABEL[t] ?? t;

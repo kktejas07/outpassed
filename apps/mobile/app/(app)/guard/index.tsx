@@ -1,13 +1,17 @@
+import { SosBanner } from "../../../src/components/SosBanner";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Animated, Easing, Image, StyleSheet, View } from "react-native";
+import { photoSrc } from "../../../src/api/client";
+import { PhotoCapture } from "../../../src/components/PhotoCapture";
 import { useGateDesk } from "../../../src/features/gate/useGateDesk";
 import { color, font, radius } from "../../../src/theme/tokens";
 import { Button } from "../../../src/ui/Button";
+import { Card } from "../../../src/ui/Card";
 import { Avatar, Segmented } from "../../../src/ui/bits";
 import { Field } from "../../../src/ui/Field";
-import { FadeIn, PopIn } from "../../../src/ui/motion";
+import { Bounce, FadeIn, PopIn, Shake, SuccessRings } from "../../../src/ui/motion";
 import { Screen } from "../../../src/ui/Screen";
 import { Text } from "../../../src/ui/Text";
 
@@ -25,15 +29,35 @@ export default function GuardScan() {
   const desk = useGateDesk();
   const [mode, setMode] = useState<"camera" | "manual">("camera");
   const [manual, setManual] = useState("");
+  // Picture of the person at this exit/entry; cleared for each new scan.
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [skipPhoto, setSkipPhoto] = useState(false);
+  const resetDesk = () => {
+    setPhoto(null);
+    setSkipPhoto(false);
+    desk.reset();
+  };
   const [permission, requestPermission] = useCameraPermissions();
   const s = desk.state;
   const scanning = s.phase === "idle";
 
   const verdict = s.phase === "verdict" || s.phase === "saving" || s.phase === "done" ? s.verdict : null;
   const allowed = verdict?.allowed;
+  // Under 18 without a parent's agreement: no photo is taken or kept.
+  const noPhoto = verdict?.kind === "OUTPASS" && verdict.person?.photoAllowed === false;
 
   return (
-    <Screen title="Main Gate" eyebrow="Security desk">
+    <Screen
+      hero={{
+        greeting: "Security desk,",
+        title: "Main Gate",
+        chip: desk.pending.length
+          ? { label: `${desk.pending.length} waiting to sync`, tone: "warn" }
+          : { label: "On duty · online", tone: "safe" },
+      }}
+      bell
+    >
+      <SosBanner />
       {desk.pending.length > 0 ? (
         <View style={styles.queue}>
           <Ionicons name="cloud-upload-outline" size={18} color={color.amber} />
@@ -46,14 +70,16 @@ export default function GuardScan() {
 
       {scanning || s.phase === "checking" ? (
         <>
-          <Segmented
-            options={[
-              { value: "camera", label: "Scan QR" },
-              { value: "manual", label: "Roll number" },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
+          <Card style={{ padding: 6 }}>
+            <Segmented
+              options={[
+                { value: "camera", label: "Scan QR" },
+                { value: "manual", label: "Code or roll no." },
+              ]}
+              value={mode}
+              onChange={setMode}
+            />
+          </Card>
           {mode === "camera" ? (
             <FadeIn>
               <View style={styles.viewfinder}>
@@ -66,7 +92,7 @@ export default function GuardScan() {
                   />
                 ) : (
                   <View style={styles.noCam}>
-                    <Ionicons name="camera-outline" size={34} color={color.goldLight} />
+                    <Ionicons name="camera-outline" size={34} color={color.accentLight} />
                     <Text variant="label" style={{ color: color.white, textAlign: "center" }}>Camera access is needed to scan passes</Text>
                     <Button compact label="Allow camera" onPress={() => void requestPermission()} />
                   </View>
@@ -86,19 +112,22 @@ export default function GuardScan() {
           ) : (
             <FadeIn style={{ gap: 12 }}>
               <Field
-                label="Roll number or pass code"
-                placeholder="e.g. 21CS104"
+                label="Visitor code or student roll number"
+                placeholder="e.g. 606088 or 21CS104"
                 autoCapitalize="characters"
                 value={manual}
                 onChangeText={setManual}
-                hint="For a student without their phone. Check their college ID."
+                hint="Visitors: the 6-digit code on their invite. Students without a phone: roll number, then check their college ID."
               />
               <Button
                 label="Look up"
                 icon="search"
                 loading={s.phase === "checking"}
                 disabled={!manual.trim()}
-                onPress={() => void desk.check(manual.trim().startsWith("v1.") ? { qr: manual.trim() } : { rollNo: manual })}
+                onPress={() => {
+                  const v = manual.trim();
+                  void desk.check(/^v[12]\./.test(v) ? { qr: v } : /^\d{6}$/.test(v) ? { visitCode: v } : { rollNo: v });
+                }}
               />
             </FadeIn>
           )}
@@ -118,9 +147,12 @@ export default function GuardScan() {
 
       {verdict ? (
         <PopIn style={[styles.verdict, { borderColor: allowed ? "#BBE5C8" : "#F3C7C7" }]}>
-          <View style={[styles.badge, { backgroundColor: allowed ? color.greenSoft : color.redSoft }]}>
-            <Ionicons name={allowed ? "checkmark-circle" : "close-circle"} size={40} color={allowed ? color.greenBright : color.red} />
-          </View>
+          <Shake active={!allowed} style={{ alignItems: "center", justifyContent: "center" }}>
+            {allowed ? <SuccessRings color={color.greenBright} /> : null}
+            <Bounce style={[styles.badge, { backgroundColor: allowed ? color.greenSoft : color.redSoft }]}>
+              <Ionicons name={allowed ? "checkmark-circle" : "close-circle"} size={40} color={allowed ? color.greenBright : color.red} />
+            </Bounce>
+          </Shake>
           <Text variant="title" style={{ color: allowed ? color.green : color.red, textAlign: "center" }}>
             {s.phase === "done" ? (s.accepted ? (verdict.direction === "ENTRY" ? "Entry recorded" : "Exit recorded") : "Turned back") : allowed ? verdict.direction === "ENTRY" ? "Allow entry" : "Allow exit" : "Do not allow"}
           </Text>
@@ -128,9 +160,26 @@ export default function GuardScan() {
             {s.phase === "done" && s.queued ? "Saved on this device — it will sync when the network is back." : verdict.message}
           </Text>
 
+          {verdict.offline ? (
+            <View style={styles.noPhoto}>
+              <Ionicons name="cloud-offline-outline" size={18} color={color.amber} />
+              <Text variant="label" style={{ flex: 1, color: color.amber }}>Checked on this phone (no internet). Compare with their college ID.</Text>
+            </View>
+          ) : verdict.person && verdict.kind === "OUTPASS" ? (
+            photoSrc(verdict.person.photoUrl) ? (
+              // Big enough to compare with the face in front of the guard.
+              <Image source={{ uri: photoSrc(verdict.person.photoUrl)! }} style={styles.photo} accessibilityLabel={`Photo of ${verdict.person.name} on file`} />
+            ) : (
+              <View style={styles.noPhoto}>
+                <Ionicons name="id-card-outline" size={18} color={color.amber} />
+                <Text variant="label" style={{ flex: 1, color: color.amber }}>No photo on file — check their college ID</Text>
+              </View>
+            )
+          ) : null}
+
           {verdict.person ? (
             <View style={styles.person}>
-              <Avatar name={verdict.person.name} size={52} tone="gold" />
+              <Avatar name={verdict.person.name} size={52} tone="accent" photoUrl={verdict.person.photoUrl} />
               <View style={{ flex: 1 }}>
                 <Text variant="heading">{verdict.person.name}</Text>
                 <Text variant="caption">{verdict.person.detail}</Text>
@@ -143,17 +192,37 @@ export default function GuardScan() {
 
           {(s.phase === "verdict" || s.phase === "saving") && allowed ? (
             <>
-              <Text variant="label" style={{ alignSelf: "flex-start" }}>Does the face match their ID?</Text>
+              <View style={{ alignSelf: "stretch" }}>
+                {noPhoto ? (
+                  <View style={styles.consentNote}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={color.indigo} />
+                    <Text variant="caption" style={{ flex: 1, color: color.ink }}>No photo for this student: under 18 and their parent hasn't agreed. Check their college ID.</Text>
+                  </View>
+                ) : (
+                  <PhotoCapture
+                    value={photo}
+                    onChange={setPhoto}
+                    label={verdict.direction === "ENTRY" ? "Photo at entry" : "Photo at exit"}
+                    hint={desk.photoRequired ? "Required by your college for every exit and entry." : "Kept with this gate record."}
+                  />
+                )}
+                {desk.photoRequired && !photo && !noPhoto ? (
+                  <Button compact tone="ghost" label={skipPhoto ? "Photo skipped (noted in the log)" : "Camera not working? Skip photo"} style={{ alignSelf: "flex-start", paddingHorizontal: 0 }} onPress={() => setSkipPhoto((v) => !v)} />
+                ) : null}
+              </View>
+              <Text variant="label" style={{ alignSelf: "flex-start" }}>
+                {verdict.kind === "OUTPASS" && verdict.person?.photoUrl ? "Does the face match the photo?" : "Does the face match their ID?"}
+              </Text>
               <View style={styles.row}>
-                <Button style={{ flex: 1 }} tone="danger" label="No match" onPress={() => void desk.confirm(false, mode === "manual" ? "MANUAL" : "QR")} disabled={s.phase === "saving"} />
-                <Button style={{ flex: 1.4 }} tone="success" icon="checkmark" label={verdict.direction === "ENTRY" ? "Let in" : "Let out"} loading={s.phase === "saving"} onPress={() => void desk.confirm(true, mode === "manual" ? "MANUAL" : "QR")} />
+                <Button style={{ flex: 1 }} tone="danger" label="No match" onPress={() => void desk.confirm(false, mode === "manual" ? "MANUAL" : "QR", photo)} disabled={s.phase === "saving"} />
+                <Button style={{ flex: 1.4 }} tone="success" icon="checkmark" label={verdict.direction === "ENTRY" ? "Let in" : "Let out"} loading={s.phase === "saving"} disabled={desk.photoRequired && !noPhoto && !photo && !skipPhoto} onPress={() => void desk.confirm(true, mode === "manual" ? "MANUAL" : "QR", noPhoto ? null : photo)} />
               </View>
             </>
           ) : (
-            <Button style={{ alignSelf: "stretch" }} tone={s.phase === "done" ? "gold" : "outline"} icon="scan" label="Scan next" onPress={() => { setManual(""); desk.reset(); }} />
+            <Button style={{ alignSelf: "stretch" }} tone={s.phase === "done" ? "accent" : "outline"} icon="scan" label="Scan next" onPress={() => { setManual(""); resetDesk(); }} />
           )}
           {s.phase === "verdict" && allowed ? (
-            <Button tone="ghost" label="Cancel" onPress={desk.reset} />
+            <Button tone="ghost" label="Cancel" onPress={resetDesk} />
           ) : null}
         </PopIn>
       ) : null}
@@ -162,13 +231,16 @@ export default function GuardScan() {
 }
 
 const styles = StyleSheet.create({
+  consentNote: { flexDirection: "row", gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: color.indigoTint },
   viewfinder: { height: 300, borderRadius: radius.lg, overflow: "hidden", backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
   noCam: { alignItems: "center", gap: 12, padding: 24 },
   corners: { position: "absolute", width: 240, height: 240 },
-  corner: { position: "absolute", width: 34, height: 34, borderColor: color.goldLight, borderRadius: 6 },
-  scanLine: { position: "absolute", left: 10, right: 10, height: 2, backgroundColor: color.goldLight, opacity: 0.9 },
+  corner: { position: "absolute", width: 34, height: 34, borderColor: color.accentLight, borderRadius: 6 },
+  scanLine: { position: "absolute", left: 10, right: 10, height: 2, backgroundColor: color.accentLight, opacity: 0.9 },
   verdict: { backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1.5, padding: 20, alignItems: "center", gap: 12 },
   badge: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  photo: { width: 176, height: 176, borderRadius: radius.lg, backgroundColor: color.ground, borderWidth: 3, borderColor: color.white },
+  noPhoto: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "stretch", padding: 12, borderRadius: radius.md, backgroundColor: color.amberSoft },
   person: { flexDirection: "row", alignItems: "center", gap: 12, alignSelf: "stretch", padding: 12, borderRadius: radius.md, backgroundColor: color.ground },
   late: { backgroundColor: color.redSoft, paddingHorizontal: 8, height: 24, borderRadius: 12, justifyContent: "center" },
   lateText: { fontFamily: font.bodyBold, fontSize: 11, color: color.red },

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useAction, useQuery } from "../../lib/useQuery";
+import { useRibbon } from "../../ui/Ribbon";
 
 export type VisitTab = "pending" | "onsite" | "all";
 
@@ -11,6 +12,7 @@ export function useVisitList(initial: VisitTab = "all") {
   const [tab, setTab] = useState<VisitTab>(initial);
   const q = useQuery((t) => api.listVisits(t, tab), [tab]);
   const decide = useAction((t, id: string, d: Decision) => api.decideVisit(t, id, d));
+  const ribbon = useRibbon();
   return {
     ...q,
     tab,
@@ -18,7 +20,10 @@ export function useVisitList(initial: VisitTab = "all") {
     visits: q.data ?? [],
     decide: async (id: string, d: Decision) => {
       const res = await decide.run(id, d);
-      if (res) void q.reload();
+      if (res) {
+        void q.reload();
+        ribbon.show(d === "APPROVE" ? { tone: "success", title: `${res.visitorName} can come in`, body: "The gate has been told." } : { tone: "info", title: `${res.visitorName} declined` });
+      }
     },
     deciding: decide.busy,
     decideError: decide.error,
@@ -43,18 +48,49 @@ export const visitWindows = [
   { value: "2h", label: "Next 2 hours", from: 0, hours: 2 },
   { value: "today", label: "Rest of today", from: 0, hours: -1 },
   { value: "tomorrow", label: "Tomorrow", from: 24, hours: 10 },
+  { value: "regular", label: "Regular visitor", from: 0, hours: 0 },
 ] as const;
+
+/** Daily hours for a regular pass. */
+export const regularHours = [
+  { value: "10:00-13:00", label: "10 AM – 1 PM" },
+  { value: "10:00-18:00", label: "10 AM – 6 PM" },
+  { value: "16:00-20:00", label: "4 PM – 8 PM" },
+] as const;
+export const regularSpans = [
+  { value: "30", label: "1 month" },
+  { value: "90", label: "3 months" },
+  { value: "180", label: "6 months" },
+] as const;
+export const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export type VisitWindow = (typeof visitWindows)[number]["value"];
 
 /** A host invites a visitor; returns the pass to share. */
 export function useInviteVisitor() {
   const f = useVisitorFields();
   const [window, setWindow] = useState<VisitWindow>("2h");
+  // Regular pass: Sundays 10–6 for 3 months by default (the typical parent visit).
+  const [days, setDays] = useState<number[]>([0]);
+  const [dailyHours, setDailyHours] = useState<(typeof regularHours)[number]["value"]>("10:00-18:00");
+  const [span, setSpan] = useState<(typeof regularSpans)[number]["value"]>("90");
+  const ribbon = useRibbon();
   const [touched, setTouched] = useState(false);
   const action = useAction(async (t) => {
     const now = new Date();
     let validFrom = now;
     let validTo: Date;
+    if (window === "regular") {
+      const [from, to] = dailyHours.split("-") as [string, string];
+      return api.createVisit(t, {
+        visitorName: f.visitorName.trim(),
+        visitorPhone: f.visitorPhone.trim(),
+        visitorType: f.visitorType,
+        purpose: f.purpose.trim(),
+        validFrom: now.toISOString(),
+        validTo: new Date(now.getTime() + Number(span) * 86_400_000).toISOString(),
+        repeat: { days, from, to },
+      });
+    }
     if (window === "2h") validTo = new Date(now.getTime() + 2 * 3_600_000);
     else if (window === "today") {
       validTo = new Date(now);
@@ -75,17 +111,29 @@ export function useInviteVisitor() {
       validTo: validTo.toISOString(),
     });
   });
-  const valid = !Object.values(f.errors).some(Boolean);
+  const valid = !Object.values(f.errors).some(Boolean) && (window !== "regular" || days.length > 0);
   return {
     ...f,
     errors: touched ? f.errors : { visitorName: null, visitorPhone: null, purpose: null },
     window,
-    setWindow,
+    setWindow: (w: VisitWindow) => {
+      setWindow(w);
+      if (w === "regular" && f.visitorType === "GUEST") f.setVisitorType("PARENT");
+    },
+    days,
+    toggleDay: (d: number) => setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort())),
+    dailyHours,
+    setDailyHours,
+    span,
+    setSpan,
     submit: async () => {
       setTouched(true);
       if (!valid) return;
       const v = await action.run();
-      if (v) router.replace(`/visit/${v.id}`);
+      if (v) {
+        router.replace(`/visit/${v.id}`);
+        ribbon.show({ tone: "success", title: "Visitor pass ready", body: `Share it with ${v.visitorName.split(" ")[0]}. Entry code ${v.code}.`, celebrate: true });
+      }
     },
     submitting: action.busy,
     submitError: action.error,
@@ -97,10 +145,13 @@ export function useWalkIn() {
   const { token } = useSession();
   const f = useVisitorFields();
   const [hostQuery, setHostQuery] = useState("");
-  const [hosts, setHosts] = useState<{ id: string; name: string; role: string }[]>([]);
-  const [host, setHost] = useState<{ id: string; name: string } | null>(null);
+  const [hosts, setHosts] = useState<{ id: string; name: string; role: string; detail: string | null }[]>([]);
+  const [host, setHost] = useState<{ id: string; name: string; detail?: string | null } | null>(null);
+  const [idNumber, setIdNumber] = useState("");
+  const [photo, setPhoto] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
+  const ribbon = useRibbon();
 
   useEffect(() => {
     if (!token) return;
@@ -117,6 +168,8 @@ export function useWalkIn() {
       visitorType: f.visitorType,
       purpose: f.purpose.trim(),
       hostId,
+      visitorIdNumber: idNumber.trim() || undefined,
+      photo: photo ?? undefined,
       durationMinutes: 180,
     }),
   );
@@ -132,12 +185,19 @@ export function useWalkIn() {
     hosts,
     host,
     setHost,
+    idNumber,
+    setIdNumber,
+    photo,
+    setPhoto,
     created,
     submit: async () => {
       setTouched(true);
       if (!valid || !host) return;
       const v = await action.run(host.id);
-      if (v) setCreated(`${v.visitorName} is waiting for ${host.name} to approve.`);
+      if (v) {
+        setCreated(`${v.visitorName} is waiting for ${host.name} to approve.`);
+        ribbon.show({ tone: "success", title: "Sent to host", body: `${host.name} will get an alert with the visitor's photo.` });
+      }
     },
     reset: () => {
       f.setVisitorName("");
@@ -145,6 +205,8 @@ export function useWalkIn() {
       f.setPurpose("");
       setHost(null);
       setHostQuery("");
+      setIdNumber("");
+      setPhoto(null);
       setTouched(false);
       setCreated(null);
     },

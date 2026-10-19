@@ -42,9 +42,11 @@ export function relative(iso: string | Date, now = new Date()): string {
 }
 
 export const outpassTypes: { value: OutpassType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { value: "LOCAL", label: "Local", icon: "walk-outline" },
-  { value: "HOME", label: "Home", icon: "home-outline" },
-  { value: "MEDICAL", label: "Medical", icon: "medkit-outline" },
+  { value: "MEDICAL", label: "Sick / medical", icon: "medkit-outline" },
+  { value: "HOME", label: "Home / family trip", icon: "home-outline" },
+  { value: "LOCAL", label: "Local outing", icon: "walk-outline" },
+  { value: "ACADEMIC", label: "Academic", icon: "school-outline" },
+  { value: "PERSONAL", label: "Personal", icon: "person-outline" },
   { value: "EMERGENCY", label: "Emergency", icon: "alert-circle-outline" },
 ];
 
@@ -55,9 +57,10 @@ export function typeLabel(t: OutpassType) {
 export function outpassStatus(o: Pick<OutpassDto, "status" | "overdue">): { label: string; tone: PillTone } {
   if (o.overdue) return { label: "Overdue", tone: "red" };
   const map: Record<OutpassStatus, { label: string; tone: PillTone }> = {
+    PENDING_FACULTY: { label: "Awaiting faculty", tone: "amber" },
     PENDING_PARENT: { label: "Awaiting parent", tone: "amber" },
     PENDING_WARDEN: { label: "Awaiting warden", tone: "amber" },
-    APPROVED: { label: "Approved", tone: "gold" },
+    APPROVED: { label: "Approved", tone: "accent" },
     OUT: { label: "Out of campus", tone: "indigo" },
     RETURNED: { label: "Returned", tone: "green" },
     REJECTED: { label: "Rejected", tone: "red" },
@@ -67,13 +70,13 @@ export function outpassStatus(o: Pick<OutpassDto, "status" | "overdue">): { labe
 }
 
 export function isActive(status: OutpassStatus) {
-  return status === "PENDING_PARENT" || status === "PENDING_WARDEN" || status === "APPROVED" || status === "OUT";
+  return status === "PENDING_FACULTY" || status === "PENDING_PARENT" || status === "PENDING_WARDEN" || status === "APPROVED" || status === "OUT";
 }
 
 export function visitStatus(v: Pick<VisitDto, "status">): { label: string; tone: PillTone } {
   const map: Record<VisitStatus, { label: string; tone: PillTone }> = {
     PENDING_HOST: { label: "Awaiting host", tone: "amber" },
-    APPROVED: { label: "Expected", tone: "gold" },
+    APPROVED: { label: "Expected", tone: "accent" },
     REJECTED: { label: "Declined", tone: "red" },
     CHECKED_IN: { label: "On campus", tone: "indigo" },
     CHECKED_OUT: { label: "Left", tone: "green" },
@@ -91,6 +94,12 @@ export const visitorTypes: { value: VisitorType; label: string }[] = [
   { value: "DELIVERY", label: "Delivery" },
 ];
 
-export function studentLine(s: OutpassDto["student"]) {
+export function studentLine(s: Pick<OutpassDto["student"], "rollNo" | "hostel" | "room">) {
   return [s.rollNo, s.hostel, s.room ? `Room ${s.room}` : null].filter(Boolean).join(" · ");
+}
+
+/** "Good morning," / "Good afternoon," / "Good evening," */
+export function greeting(now = new Date()): string {
+  const h = now.getHours();
+  return h < 12 ? "Good morning," : h < 17 ? "Good afternoon," : "Good evening,";
 }

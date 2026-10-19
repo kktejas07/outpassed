@@ -10,7 +10,7 @@ import { QrCode } from "../ui/QrCode";
 import { Text } from "../ui/Text";
 
 /**
- * The gold pass the student shows at the gate. The QR changes every few
+ * The accent pass the student shows at the gate. The QR changes every few
  * seconds; the bar under it drains until the next refresh so a guard can see
  * it is live, not a screenshot.
  */
@@ -19,8 +19,11 @@ export function GatePass({
   token,
   lifetime,
   error,
+  offline,
 }: {
   outpass: OutpassDto;
+  /** Showing the saved copy because this phone has no internet. */
+  offline?: boolean;
   token: string | null;
   /** Seconds this token is shown before it's refreshed. */
   lifetime: number;
@@ -40,19 +43,26 @@ export function GatePass({
   const out = outpass.status === "OUT";
 
   return (
-    <View style={[styles.frame, shadow.gold]}>
+    <View style={[styles.frame, shadow.accent]}>
       <Animated.View style={[styles.glow, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] }) }]} />
       <View style={styles.pass}>
         <View style={styles.top}>
-          <Avatar name={outpass.student.name} size={44} tone="gold" />
+          <Avatar name={outpass.student.name} size={44} tone="accent" />
           <View style={{ flex: 1 }}>
             <Text variant="heading">{outpass.student.name}</Text>
             <Text variant="caption">{studentLine(outpass.student) || "Student"}</Text>
           </View>
-          <View style={styles.live}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
+          {offline ? (
+            <View style={[styles.live, { backgroundColor: color.amberSoft }]}>
+              <Ionicons name="cloud-offline" size={11} color={color.amber} />
+              <Text style={[styles.liveText, { color: color.amber }]}>OFFLINE</Text>
+            </View>
+          ) : (
+            <View style={styles.live}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.qrBox}>
@@ -60,7 +70,7 @@ export function GatePass({
             <QrCode value={token} size={208} />
           ) : (
             <View style={styles.qrPlaceholder}>
-              {error ? <Ionicons name="cloud-offline-outline" size={28} color={color.muted} /> : <ActivityIndicator color={color.gold} />}
+              {error ? <Ionicons name="cloud-offline-outline" size={28} color={color.muted} /> : <ActivityIndicator color={color.accent} />}
             </View>
           )}
         </View>
@@ -68,7 +78,13 @@ export function GatePass({
           <Animated.View style={[styles.bar, { width: drain.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
         </View>
         <Text variant="caption" style={{ textAlign: "center" }}>
-          {error ? error : out ? "Show this when you're back at the gate" : "Show this to the guard at the gate"}
+          {error
+            ? error
+            : offline
+              ? "No internet. This saved pass still works at the gate."
+              : out
+                ? "Show this when you're back at the gate"
+                : "Show this to the guard at the gate"}
         </Text>
 
         <View style={styles.perf}>
@@ -93,8 +109,8 @@ export function GatePass({
 }
 
 const styles = StyleSheet.create({
-  frame: { borderRadius: 26, padding: 3, backgroundColor: color.goldFrame },
-  glow: { ...StyleSheet.absoluteFill, borderRadius: 26, backgroundColor: color.goldLight },
+  frame: { borderRadius: 26, padding: 3, backgroundColor: color.accentFrame },
+  glow: { ...StyleSheet.absoluteFill, borderRadius: 26, backgroundColor: color.accentLight },
   pass: { backgroundColor: color.white, borderRadius: 23, padding: 18, gap: 12, overflow: "hidden" },
   top: { flexDirection: "row", alignItems: "center", gap: 12 },
   live: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: color.greenSoft, paddingHorizontal: 8, height: 24, borderRadius: radius.pill },
@@ -102,10 +118,10 @@ const styles = StyleSheet.create({
   liveText: { fontFamily: font.bodyBold, fontSize: 10.5, color: color.green, letterSpacing: 0.8 },
   qrBox: { alignSelf: "center", padding: 12, borderRadius: 18, borderWidth: 1, borderColor: color.line, backgroundColor: color.white },
   qrPlaceholder: { width: 208, height: 208, alignItems: "center", justifyContent: "center" },
-  track: { height: 4, borderRadius: 2, backgroundColor: color.goldSoft, overflow: "hidden", marginHorizontal: 30 },
-  bar: { height: 4, borderRadius: 2, backgroundColor: color.gold },
+  track: { height: 4, borderRadius: 2, backgroundColor: color.accentSoft, overflow: "hidden", marginHorizontal: 30 },
+  bar: { height: 4, borderRadius: 2, backgroundColor: color.accent },
   perf: { height: 20, justifyContent: "center", marginHorizontal: -18 },
-  notch: { position: "absolute", width: 36, height: 20, borderRadius: 10, backgroundColor: color.goldFrame },
-  dash: { marginHorizontal: 22, borderTopWidth: 1.5, borderStyle: "dashed", borderColor: color.goldLight },
+  notch: { position: "absolute", width: 36, height: 20, borderRadius: 10, backgroundColor: color.accentFrame },
+  dash: { marginHorizontal: 22, borderTopWidth: 1.5, borderStyle: "dashed", borderColor: color.accentLight },
   meta: { flexDirection: "row", gap: 12 },
 });

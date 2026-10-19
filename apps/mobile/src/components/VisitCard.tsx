@@ -14,7 +14,7 @@ export function VisitCard({ visit, onPress, children }: { visit: VisitDto; onPre
   return (
     <Card onPress={onPress} accent={s.tone === "amber" ? "#F59E0B" : undefined} style={{ gap: 10 }}>
       <View style={styles.row}>
-        <Avatar name={visit.visitorName} size={38} tone="gold" />
+        <Avatar name={visit.visitorName} size={visit.visitorPhotoUrl ? 48 : 38} tone="accent" photoUrl={visit.visitorPhotoUrl} />
         <View style={{ flex: 1 }}>
           <Text variant="heading" numberOfLines={1}>{visit.visitorName}</Text>
           <Text variant="caption" numberOfLines={1}>{type}{visit.walkIn ? " · walk-in" : ""} · meeting {visit.host.name}</Text>

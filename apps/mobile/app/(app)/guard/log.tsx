@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { api } from "../../../src/api/client";
 import { time, when } from "../../../src/lib/format";
 import { useQuery } from "../../../src/lib/useQuery";
-import { color } from "../../../src/theme/tokens";
+import { color, font } from "../../../src/theme/tokens";
 import { Card } from "../../../src/ui/Card";
 import { Empty, ErrorNote, Loading } from "../../../src/ui/bits";
 import { FadeIn } from "../../../src/ui/motion";
@@ -25,7 +25,11 @@ export default function GateLog() {
           <FadeIn key={e.id} index={i}>
             <Card style={styles.row}>
               <View style={[styles.icon, { backgroundColor: !e.accepted ? color.redSoft : exit ? color.indigoTint : color.greenSoft }]}>
-                <Ionicons name={!e.accepted ? "hand-left-outline" : exit ? "arrow-up-outline" : "arrow-down-outline"} size={18} color={tone} />
+                {e.accepted ? (
+                  <Text style={[styles.badge, { color: tone }]}>{exit ? "OUT" : "IN"}</Text>
+                ) : (
+                  <Ionicons name="hand-left-outline" size={18} color={tone} />
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text variant="label">{e.personName}</Text>
@@ -45,5 +49,6 @@ export default function GateLog() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  icon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  icon: { width: 46, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  badge: { fontFamily: font.bodyBold, fontSize: 13, letterSpacing: 0.4 },
 });

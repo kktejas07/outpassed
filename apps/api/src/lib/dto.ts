@@ -1,4 +1,4 @@
-import type { Prisma, StudentProfile, User } from "@prisma/client";
+import type { Department, Prisma, StudentProfile, User, UserPhoto } from "@prisma/client";
 import type {
   ApprovalDto,
   GateEventDto,
@@ -7,6 +7,11 @@ import type {
   VisitDto,
 } from "@outpassed/shared";
 import { isOverdue } from "../domain/outpassFlow";
+import { gatePhotoUrl, photoUrl, visitorPhotoUrl } from "./photo";
+import { cachedSettings } from "./settings";
+import { ADULT_AGE, ageOn } from "../domain/outpassFlow";
+import { passUrl } from "./visitCode";
+import { consentState } from "./consent";
 
 /**
  * Prisma rows -> API DTOs. Dates are serialised to ISO strings so responses
@@ -15,7 +20,41 @@ import { isOverdue } from "../domain/outpassFlow";
 
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
-export function toUserDto(user: User & { student?: StudentProfile | null }): UserDto {
+/** Everything toUserDto can show; pass it to findUnique/findMany for a full DTO. */
+export const userInclude = {
+  student: { include: { department: true } },
+  photo: { select: { updatedAt: true } },
+  department: true,
+  headOf: { select: { id: true } },
+  photoConsent: { select: { studentId: true } },
+} satisfies Prisma.UserInclude;
+
+type UserRow = User & {
+  student?: (StudentProfile & { department?: Department | null }) | null;
+  photo?: Pick<UserPhoto, "updatedAt"> | null;
+  department?: Department | null;
+  headOf?: { id: string }[];
+  photoConsent?: { studentId: string } | null;
+};
+
+/** Students: may photos be stored? (Needs `photoConsent` in the include to report GIVEN.) */
+export function photoConsentOf(user: UserRow) {
+  return user.role === "STUDENT" ? consentState(user.student?.dateOfBirth, !!user.photoConsent) : "NOT_NEEDED";
+}
+
+/**
+ * Sponsored offers go to adult students only, and never on school campuses.
+ * Students with no date of birth on file are treated as possibly under 18.
+ */
+function showsOffers(user: UserRow): boolean {
+  const s = cachedSettings();
+  if (user.role !== "STUDENT" || !s.offersEnabled || s.schoolMode) return false;
+  const dob = user.student?.dateOfBirth;
+  return !!dob && ageOn(dob, new Date()) >= ADULT_AGE;
+}
+
+export function toUserDto(user: UserRow): UserDto {
+  const dept = user.department ?? user.student?.department ?? null;
   return {
     id: user.id,
     email: user.email,
@@ -27,19 +66,26 @@ export function toUserDto(user: User & { student?: StudentProfile | null }): Use
       ? {
           rollNo: user.student.rollNo,
           hostel: user.student.hostel,
+          hostelId: user.student.hostelId,
           room: user.student.room,
           dateOfBirth: user.student.dateOfBirth
             ? user.student.dateOfBirth.toISOString().slice(0, 10)
             : null,
         }
       : null,
+    photoUrl: photoUrl(user.id, user.photo?.updatedAt),
+    department: dept ? { id: dept.id, name: dept.name, isHod: !!user.headOf?.some((d) => d.id === dept.id) } : null,
+    showOffers: showsOffers(user),
+    photoConsent: photoConsentOf(user),
   };
 }
 
 /** The include every outpass query uses, so the DTO always has what it needs. */
 export const outpassInclude = {
-  student: { include: { student: true } },
+  student: { include: { student: { include: { department: true } }, photo: { select: { updatedAt: true } }, photoConsent: { select: { studentId: true } } } },
+  faculty: { select: { id: true, name: true } },
   approvals: { include: { approver: true }, orderBy: { createdAt: "asc" } },
+  extensions: { include: { decidedBy: true }, orderBy: { createdAt: "desc" }, take: 1 },
 } satisfies Prisma.OutpassInclude;
 
 export type OutpassWithRelations = Prisma.OutpassGetPayload<{ include: typeof outpassInclude }>;
@@ -63,7 +109,10 @@ export function toOutpassDto(row: OutpassWithRelations, now: Date = new Date()):
       rollNo: row.student.student?.rollNo ?? null,
       hostel: row.student.student?.hostel ?? null,
       room: row.student.student?.room ?? null,
+      photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt),
+      department: row.student.student?.department?.name ?? null,
     },
+    faculty: row.faculty,
     approvals: row.approvals.map(
       (a): ApprovalDto => ({
         id: a.id,
@@ -76,6 +125,17 @@ export function toOutpassDto(row: OutpassWithRelations, now: Date = new Date()):
         createdAt: a.createdAt.toISOString(),
       }),
     ),
+    extension: row.extensions[0]
+      ? {
+          id: row.extensions[0].id,
+          previousReturnBy: row.extensions[0].previousReturnBy.toISOString(),
+          requestedReturnBy: row.extensions[0].requestedReturnBy.toISOString(),
+          reason: row.extensions[0].reason,
+          status: row.extensions[0].status,
+          decidedByName: row.extensions[0].decidedBy?.name ?? null,
+          createdAt: row.extensions[0].createdAt.toISOString(),
+        }
+      : null,
   };
 }
 
@@ -87,20 +147,25 @@ export function toVisitDto(row: VisitWithHost): VisitDto {
     id: row.id,
     visitorName: row.visitorName,
     visitorPhone: row.visitorPhone,
+    visitorIdNumber: row.visitorIdNumber,
+    visitorPhotoUrl: visitorPhotoUrl(row.id, !!row.visitorPhotoMime),
     visitorType: row.visitorType,
     purpose: row.purpose,
     status: row.status,
     walkIn: row.walkIn,
     validFrom: row.validFrom.toISOString(),
     validTo: row.validTo.toISOString(),
-    host: { id: row.host.id, name: row.host.name },
+    host: { id: row.host.id, name: row.host.name, role: row.host.role },
     checkedInAt: iso(row.checkedInAt),
     checkedOutAt: iso(row.checkedOutAt),
+    code: row.code,
+    passUrl: passUrl(row.passToken),
+    repeat: row.repeatDays.length && row.dailyFrom && row.dailyTo ? { days: row.repeatDays, from: row.dailyFrom, to: row.dailyTo } : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-export function toGateEventDto(row: Prisma.GateEventGetPayload<object>): GateEventDto {
+export function toGateEventDto(row: Prisma.GateEventGetPayload<object> & { photo?: { mime: string } | null; hasPhoto?: boolean }): GateEventDto {
   return {
     id: row.id,
     direction: row.direction,
@@ -112,6 +177,7 @@ export function toGateEventDto(row: Prisma.GateEventGetPayload<object>): GateEve
     visitId: row.visitId,
     guardId: row.guardId,
     note: row.note,
+    photoUrl: gatePhotoUrl(row.id, row.hasPhoto ?? !!row.photo),
     createdAt: row.createdAt.toISOString(),
   };
 }

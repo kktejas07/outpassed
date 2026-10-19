@@ -63,7 +63,7 @@ describe("outpass approval chain", () => {
 
     const qr = await app.inject({ method: "GET", url: `/outpasses/${pass.id}/qr`, headers: auth(student.token) });
     expect(qr.statusCode).toBe(200);
-    expect(qr.json().token).toMatch(/^v1\./);
+    expect(qr.json().token).toMatch(/^v2\./);
   });
 
   it("allows only one active outpass", async () => {

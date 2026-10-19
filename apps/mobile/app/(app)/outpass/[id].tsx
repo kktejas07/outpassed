@@ -4,6 +4,7 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { ApprovalTimeline } from "../../../src/components/ApprovalTimeline";
 import { GatePass } from "../../../src/components/GatePass";
+import { ExtensionNote, LateReturnAsk, LateReturnDecision } from "../../../src/components/LateReturn";
 import { useOutpassDetail } from "../../../src/features/outpass/useOutpassDetail";
 import { outpassStatus, relative, studentLine, typeLabel, when } from "../../../src/lib/format";
 import { color } from "../../../src/theme/tokens";
@@ -69,7 +70,7 @@ export default function OutpassDetail() {
     >
       {vm.showQr ? (
         <PopIn>
-          <GatePass outpass={p} token={vm.qr?.token ?? null} lifetime={vm.qr?.lifetime ?? 30} error={vm.qrError} />
+          <GatePass outpass={p} token={vm.qr?.token ?? null} lifetime={vm.qr?.lifetime ?? 30} error={vm.qrError} offline={vm.qr?.offline} />
         </PopIn>
       ) : null}
 
@@ -82,6 +83,18 @@ export default function OutpassDetail() {
             </Text>
           </View>
         </FadeIn>
+      ) : null}
+
+      {isStudent && (p.status === "OUT" || p.status === "APPROVED" || p.extension) ? (
+        <FadeIn index={1}>
+          <LateReturnAsk outpass={p} canAsk={vm.canAskExtension} busy={vm.extending} error={vm.extendError} onSend={(until, reason) => void vm.requestExtension(until, reason)} />
+        </FadeIn>
+      ) : null}
+
+      {vm.canDecideExtension ? (
+        <LateReturnDecision outpass={p} busy={vm.decidingExtension} error={vm.decideExtensionError} onDecide={(d) => void vm.decideExtension(d)} />
+      ) : !isStudent && p.extension ? (
+        <ExtensionNote outpass={p} />
       ) : null}
 
       {!isStudent ? (
@@ -119,9 +132,9 @@ export default function OutpassDetail() {
         <FadeIn index={4} style={{ gap: 8 }}>
           {vm.needsOverrideReason ? (
             <View style={styles.override}>
-              <Ionicons name="shield-checkmark-outline" size={18} color={color.goldText} />
-              <Text variant="caption" style={{ flex: 1, color: color.goldText }}>
-                The parent hasn't responded yet. Approving now overrides their step and is logged with your reason.
+              <Ionicons name="shield-checkmark-outline" size={18} color={color.accentText} />
+              <Text variant="caption" style={{ flex: 1, color: color.accentText }}>
+                {p.status === "PENDING_FACULTY" ? "The faculty member hasn't responded yet." : "The parent hasn't responded yet."} Approving now overrides their step and is logged with your reason.
               </Text>
             </View>
           ) : null}
@@ -141,5 +154,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 10 },
   who: { flexDirection: "row", alignItems: "center", gap: 12 },
   overdue: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 14, backgroundColor: color.redSoft },
-  override: { flexDirection: "row", gap: 10, padding: 12, borderRadius: 14, backgroundColor: color.goldSoft, borderWidth: 1, borderColor: color.goldLight },
+  override: { flexDirection: "row", gap: 10, padding: 12, borderRadius: 14, backgroundColor: color.accentSoft, borderWidth: 1, borderColor: color.accentLight },
 });

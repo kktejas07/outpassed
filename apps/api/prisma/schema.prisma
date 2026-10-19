@@ -14,6 +14,7 @@ enum Role {
   WARDEN
   GUARD
   ADMIN
+  FACULTY
 }
 
 enum OutpassType {
@@ -21,9 +22,12 @@ enum OutpassType {
   HOME
   MEDICAL
   EMERGENCY
+  ACADEMIC
+  PERSONAL
 }
 
 enum OutpassStatus {
+  PENDING_FACULTY
   PENDING_PARENT
   PENDING_WARDEN
   APPROVED
@@ -34,6 +38,7 @@ enum OutpassStatus {
 }
 
 enum ApprovalStep {
+  FACULTY
   PARENT
   WARDEN
 }
@@ -77,6 +82,8 @@ model User {
   passwordHash String
   name         String
   phone        String?
+  /// Phone in +<country><number> form, for OTP sign-in lookups.
+  phoneNormalized String?
   role         Role     @default(STUDENT)
   createdAt    DateTime @default(now())
 
@@ -88,8 +95,45 @@ model User {
   hostedVisits    Visit[]         @relation("HostedVisits")
   registeredVisits Visit[]        @relation("RegisteredVisits")
   gateEvents      GateEvent[]
+  notifications   Notification[]
+  pushTokens      PushToken[]
+  passwordResets  PasswordReset[]
+  extensionDecisions OutpassExtension[] @relation("ExtensionDecisions")
+  parcels         Parcel[]        @relation("StudentParcels")
+  loggedParcels   Parcel[]        @relation("LoggedParcels")
+  handedParcels   Parcel[]        @relation("HandedParcels")
+  sosRaised       SosAlert[]      @relation("SosRaised")
+  sosAcknowledged SosAlert[]      @relation("SosAcknowledged")
+  sosResolved     SosAlert[]      @relation("SosResolved")
+  notices         Notice[]
+  noticeReads     NoticeRead[]
+  photo           UserPhoto?
+  wardenHostels   WardenHostel[]
+  refreshTokens   RefreshToken[]
+  auditEntries    AuditLog[]
+  rollCallsTaken  RollCall[]
+  rollCallEntries RollCallEntry[] @relation("RollCallStudent")
+  /// Faculty: the department they teach in.
+  departmentId    String?
+  department      Department?     @relation("DepartmentFaculty", fields: [departmentId], references: [id], onDelete: SetNull)
+  headOf          Department[]    @relation("DepartmentHead")
+  facultyOutpasses Outpass[]      @relation("FacultyOutpasses")
+  fees            Fee[]           @relation("StudentFees")
+  feesCreated     Fee[]           @relation("FeesCreated")
+  feePayments     FeePayment[]    @relation("FeePaymentsReviewed")
+  eventsCreated   CampusEvent[]   @relation("EventsCreated")
+  eventsApproved  CampusEvent[]   @relation("EventsApproved")
+  eventRegistrations EventRegistration[]
+  marketItems     MarketItem[]
+  marketInterests MarketInterest[]
+  offersCreated   Offer[]
+  occasionsCreated Occasion[]
+  /// Students: a guardian's photo consent (needed under 18 or on a school campus).
+  photoConsent    PhotoConsent? @relation("ConsentStudent")
+  consentsGiven   PhotoConsent[] @relation("ConsentGuardian")
 
   @@index([role])
+  @@index([phoneNormalized])
   @@map("users")
 }
 
@@ -97,10 +141,16 @@ model StudentProfile {
   userId      String    @id
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   rollNo      String?   @unique
+  /// Hostel name, kept in step with `hostelId` for display.
   hostel      String?
+  hostelId    String?
+  hostelRef   Hostel?   @relation(fields: [hostelId], references: [id], onDelete: SetNull)
   room        String?
   dateOfBirth DateTime? @db.Date
+  departmentId String?
+  department  Department? @relation("DepartmentStudents", fields: [departmentId], references: [id], onDelete: SetNull)
 
+  @@index([hostelId])
   @@map("student_profiles")
 }
 
@@ -132,11 +182,17 @@ model Outpass {
   status      OutpassStatus
   exitedAt    DateTime?
   returnedAt  DateTime?
+  /// Set once the overdue alert has gone out, so it's sent only once.
+  overdueAlertedAt DateTime?
+  /// The faculty member or HOD who gave permission and approves first.
+  facultyId   String?
+  faculty     User?         @relation("FacultyOutpasses", fields: [facultyId], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   approvals  Approval[]
   gateEvents GateEvent[]
+  extensions OutpassExtension[]
 
   @@index([studentId, status])
   @@index([status, returnBy])
@@ -176,12 +232,27 @@ model Visit {
   registeredBy   User        @relation("RegisteredVisits", fields: [registeredById], references: [id])
   checkedInAt    DateTime?
   checkedOutAt   DateTime?
+  /// 6-digit entry code the visitor can read out at the gate.
+  code           String
+  /// Unguessable id for the public pass link sent to the visitor.
+  passToken      String      @unique
+  /// Optional: a student visitor's roll number or an ID number.
+  visitorIdNumber String?
+  /// Picture the guard took when the visitor arrived without an invite.
+  visitorPhoto     Bytes?
+  visitorPhotoMime String?
+  /// Regular pass: weekdays it works (0 = Sunday … 6 = Saturday). Empty for a one-off visit.
+  repeatDays     Int[]       @default([])
+  /// Daily window for a regular pass, "HH:MM" in campus time.
+  dailyFrom      String?
+  dailyTo        String?
   createdAt      DateTime    @default(now())
 
   gateEvents GateEvent[]
 
   @@index([hostId, status])
   @@index([status])
+  @@index([code])
   @@map("visits")
 }
 
@@ -202,7 +273,575 @@ model GateEvent {
   guard      User          @relation(fields: [guardId], references: [id])
   deviceTime DateTime?
   createdAt  DateTime      @default(now())
+  photo      GatePhoto?
 
   @@index([createdAt])
   @@map("gate_events")
+}
+
+/// In-app inbox entry; also sent as a phone push when the user has a device registered.
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  /// Where tapping it should go, e.g. { "outpassId": "..." }.
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// Expo push token for one installed app.
+model PushToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+/// Emailed 6-digit code for resetting a password. Only the hash is stored.
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@map("password_resets")
+}
+
+enum ExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A student's request to come back later than the approved return time.
+model OutpassExtension {
+  id                String          @id @default(uuid())
+  outpassId         String
+  outpass           Outpass         @relation(fields: [outpassId], references: [id], onDelete: Cascade)
+  previousReturnBy  DateTime
+  requestedReturnBy DateTime
+  reason            String
+  status            ExtensionStatus @default(PENDING)
+  decidedById       String?
+  decidedBy         User?           @relation("ExtensionDecisions", fields: [decidedById], references: [id])
+  decidedAt         DateTime?
+  createdAt         DateTime        @default(now())
+
+  @@index([outpassId, status])
+  @@index([status])
+  @@map("outpass_extensions")
+}
+
+enum ParcelStatus {
+  AT_GATE
+  COLLECTED
+  RETURNED
+}
+
+/// A delivery left at the gate for a student, handed over against a code.
+model Parcel {
+  id            String       @id @default(uuid())
+  studentId     String
+  student       User         @relation("StudentParcels", fields: [studentId], references: [id], onDelete: Cascade)
+  carrier       String
+  note          String?
+  /// 4-digit code the student shows to collect it.
+  code          String
+  status        ParcelStatus @default(AT_GATE)
+  loggedById    String
+  loggedBy      User         @relation("LoggedParcels", fields: [loggedById], references: [id])
+  handedById    String?
+  handedBy      User?        @relation("HandedParcels", fields: [handedById], references: [id])
+  collectedAt   DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@index([studentId, status])
+  @@index([status, createdAt])
+  @@map("parcels")
+}
+
+enum SosKind {
+  MEDICAL
+  SAFETY
+  OTHER
+}
+
+enum SosStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+/// An emergency raised from the app; wardens and guards are alerted at once.
+model SosAlert {
+  id               String    @id @default(uuid())
+  raisedById       String
+  raisedBy         User      @relation("SosRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  kind             SosKind
+  note             String?
+  status           SosStatus @default(OPEN)
+  acknowledgedById String?
+  acknowledgedBy   User?     @relation("SosAcknowledged", fields: [acknowledgedById], references: [id])
+  acknowledgedAt   DateTime?
+  resolvedById     String?
+  resolvedBy       User?     @relation("SosResolved", fields: [resolvedById], references: [id])
+  resolvedAt       DateTime?
+  resolution       String?
+  createdAt        DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([raisedById])
+  @@map("sos_alerts")
+}
+
+enum NoticeAudience {
+  STUDENTS
+  PARENTS
+  EVERYONE
+}
+
+model Notice {
+  id        String         @id @default(uuid())
+  title     String
+  body      String
+  audience  NoticeAudience @default(STUDENTS)
+  pinned    Boolean        @default(false)
+  /// Only students/parents of this hostel see it; null means every hostel.
+  hostelId  String?
+  hostel    Hostel?        @relation(fields: [hostelId], references: [id], onDelete: SetNull)
+  authorId  String
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  reads NoticeRead[]
+
+  @@index([createdAt])
+  @@map("notices")
+}
+
+model NoticeRead {
+  noticeId String
+  notice   Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt   DateTime @default(now())
+
+  @@id([noticeId, userId])
+  @@map("notice_reads")
+}
+
+/// The college or school this deployment serves (one row).
+model Institution {
+  id        Int      @id @default(1)
+  name      String
+  address   String   @default("")
+  /// Show "Offers & opportunities" to adult students.
+  offersEnabled   Boolean @default(true)
+  /// A school: hides offers and the marketplace entirely.
+  schoolMode      Boolean @default(false)
+  /// Guards must photograph each person at exit and entry.
+  requireGatePhoto Boolean @default(true)
+  /// Gate and visitor photos older than this are deleted.
+  photoRetentionDays Int @default(90)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("institution")
+}
+
+model Hostel {
+  id        String           @id @default(uuid())
+  name      String           @unique
+  createdAt DateTime         @default(now())
+  students  StudentProfile[]
+  wardens   WardenHostel[]
+  notices   Notice[]
+  rollCalls RollCall[]
+
+  @@map("hostels")
+}
+
+/// Which hostels a warden looks after. A warden with none sees every hostel.
+model WardenHostel {
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostelId String
+  hostel   Hostel @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+
+  @@id([userId, hostelId])
+  @@index([hostelId])
+  @@map("warden_hostels")
+}
+
+/// Profile photo shown to guards at the gate. Small JPEG stored in the database.
+model UserPhoto {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Bytes
+  mime      String
+  updatedAt DateTime @updatedAt
+
+  @@map("user_photos")
+}
+
+/// SMS sign-in code. Only the hash is stored.
+model OtpCode {
+  id        String    @id @default(uuid())
+  phone     String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@map("otp_codes")
+}
+
+/// Long-lived sign-in that renews short access tokens. Rotated on every use;
+/// reusing an old one revokes the whole family.
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  familyId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+/// Who did what: approvals, overrides, extensions, roll calls and admin changes.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  /// Kept even if the account is later removed.
+  actorName  String
+  actorRole  String
+  action     String
+  targetType String?
+  targetId   String?
+  summary    String
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+enum RollStatus {
+  PRESENT
+  ABSENT
+  ON_PASS
+}
+
+/// One night's attendance for one hostel.
+model RollCall {
+  id        String          @id @default(uuid())
+  hostelId  String
+  hostel    Hostel          @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  /// Campus-local date, YYYY-MM-DD.
+  date      String
+  takenById String
+  takenBy   User            @relation(fields: [takenById], references: [id], onDelete: Cascade)
+  startedAt DateTime        @default(now())
+  closedAt  DateTime?
+  entries   RollCallEntry[]
+
+  @@unique([hostelId, date])
+  @@map("roll_calls")
+}
+
+model RollCallEntry {
+  rollCallId String
+  rollCall   RollCall   @relation(fields: [rollCallId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    User       @relation("RollCallStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  status     RollStatus
+  markedAt   DateTime   @default(now())
+
+  @@id([rollCallId, studentId])
+  @@index([studentId])
+  @@map("roll_call_entries")
+}
+
+/// Academic department; its HOD hears about every pass their students take.
+model Department {
+  id        String           @id @default(uuid())
+  name      String           @unique
+  code      String?
+  hodId     String?
+  hod       User?            @relation("DepartmentHead", fields: [hodId], references: [id], onDelete: SetNull)
+  faculty   User[]           @relation("DepartmentFaculty")
+  students  StudentProfile[] @relation("DepartmentStudents")
+  createdAt DateTime         @default(now())
+
+  @@map("departments")
+}
+
+/// Picture the guard took of the person at that exit or entry.
+model GatePhoto {
+  gateEventId String    @id
+  gateEvent   GateEvent @relation(fields: [gateEventId], references: [id], onDelete: Cascade)
+  data        Bytes
+  mime        String
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@map("gate_photos")
+}
+
+enum FeeCategory {
+  HOSTEL
+  MESS
+  BUS
+  TUITION
+  EXAM
+  FINE
+  OTHER
+}
+
+enum FeeStatus {
+  DUE
+  SUBMITTED
+  PAID
+  WAIVED
+}
+
+model Fee {
+  id           String       @id @default(uuid())
+  studentId    String
+  student      User         @relation("StudentFees", fields: [studentId], references: [id], onDelete: Cascade)
+  category     FeeCategory
+  title        String
+  /// In paise (₹1 = 100).
+  amountPaise  Int
+  dueDate      DateTime     @db.Date
+  status       FeeStatus    @default(DUE)
+  note         String?
+  createdById  String
+  createdBy    User         @relation("FeesCreated", fields: [createdById], references: [id])
+  paidAt       DateTime?
+  /// Which reminder last went out: 0 none, 1 three days before, 2 due day, 3+ weekly after.
+  remindStage  Int          @default(0)
+  lastRemindedAt DateTime?
+  createdAt    DateTime     @default(now())
+  payments     FeePayment[]
+
+  @@index([studentId, status])
+  @@index([status, dueDate])
+  @@map("fees")
+}
+
+enum PaymentMethod {
+  ONLINE
+  PROOF
+  OFFICE
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model FeePayment {
+  id               String        @id @default(uuid())
+  feeId            String
+  fee              Fee           @relation(fields: [feeId], references: [id], onDelete: Cascade)
+  method           PaymentMethod
+  amountPaise      Int
+  status           PaymentStatus @default(PENDING)
+  /// UPI / bank reference the student typed, or the gateway payment id.
+  reference        String?
+  proof            Bytes?
+  proofMime        String?
+  gatewayOrderId   String?       @unique
+  gatewayPaymentId String?
+  reviewedById     String?
+  reviewedBy       User?         @relation("FeePaymentsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  note             String?
+  createdAt        DateTime      @default(now())
+
+  @@index([feeId])
+  @@index([status])
+  @@map("fee_payments")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model CampusEvent {
+  id               String              @id @default(uuid())
+  title            String
+  description      String
+  venue            String
+  category         String              @default("General")
+  startsAt         DateTime
+  endsAt           DateTime
+  /// Seats; null means no limit.
+  capacity         Int?
+  registrationOpen Boolean             @default(true)
+  status           ReviewStatus        @default(PENDING)
+  createdById      String
+  createdBy        User                @relation("EventsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  approvedById     String?
+  approvedBy       User?               @relation("EventsApproved", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectReason     String?
+  createdAt        DateTime            @default(now())
+  registrations    EventRegistration[]
+
+  @@index([status, startsAt])
+  @@map("campus_events")
+}
+
+model EventRegistration {
+  eventId   String
+  event     CampusEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@id([eventId, userId])
+  @@index([userId])
+  @@map("event_registrations")
+}
+
+enum MarketStatus {
+  PENDING
+  ACTIVE
+  SOLD
+  REJECTED
+  REMOVED
+}
+
+/// Something a student is selling to other students.
+model MarketItem {
+  id          String           @id @default(uuid())
+  sellerId    String
+  seller      User             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  /// Whole rupees; 0 means free.
+  price       Int
+  category    String
+  condition   String           @default("Used")
+  status      MarketStatus     @default(PENDING)
+  photo       Bytes?
+  photoMime   String?
+  reports     Int              @default(0)
+  occasionId  String?
+  occasion    Occasion?        @relation(fields: [occasionId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  interests   MarketInterest[]
+
+  @@index([status, createdAt])
+  @@index([occasionId])
+  @@map("market_items")
+}
+
+model MarketInterest {
+  itemId    String
+  item      MarketItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User       @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([itemId, buyerId])
+  @@map("market_interests")
+}
+
+/// A sponsored listing shown the same way to every adult student (never targeted).
+model Offer {
+  id          String    @id @default(uuid())
+  category    String
+  partnerName String
+  title       String
+  body        String
+  url         String?
+  couponCode  String?
+  activeFrom  DateTime  @default(now())
+  activeTo    DateTime?
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  /// Total taps, not per person.
+  clicks      Int       @default(0)
+  /// Featured in the banner strip on the student home and Campus tab.
+  showAsBanner Boolean  @default(false)
+  occasionId  String?
+  occasion    Occasion? @relation(fields: [occasionId], references: [id], onDelete: SetNull)
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([active, sortOrder])
+  @@map("offers")
+}
+
+/// A time-boxed campaign (Diwali sale, exam season, freshers' move-in) with
+/// its own banner; offers and student listings can be tagged to it.
+model Occasion {
+  id          String       @id @default(uuid())
+  name        String
+  tagline     String
+  /// One of the app's banner themes (indigo, teal, saffron, rose, forest, night).
+  theme       String       @default("indigo")
+  /// An Ionicons name.
+  icon        String       @default("sparkles")
+  startsAt    DateTime
+  endsAt      DateTime
+  active      Boolean      @default(true)
+  createdById String
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  offers      Offer[]
+  items       MarketItem[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("occasions")
+}
+
+/// A guardian agreed that the college may store photos of this student
+/// (profile photo and gate photos). Needed for students under 18 and for
+/// every student on a school campus. Withdrawing deletes the row and the photos.
+model PhotoConsent {
+  studentId  String   @id
+  student    User     @relation("ConsentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  guardianId String
+  guardian   User     @relation("ConsentGuardian", fields: [guardianId], references: [id], onDelete: Cascade)
+  /// Which wording they agreed to.
+  version    String
+  givenAt    DateTime @default(now())
+
+  @@map("photo_consents")
 }

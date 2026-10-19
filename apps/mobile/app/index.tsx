@@ -9,7 +9,7 @@ export default function Index() {
   if (status === "loading") {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: color.white }}>
-        <ActivityIndicator color={color.gold} />
+        <ActivityIndicator color={color.accent} />
       </View>
     );
   }

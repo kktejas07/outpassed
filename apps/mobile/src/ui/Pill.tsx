@@ -2,10 +2,10 @@ import { StyleSheet, View } from "react-native";
 import { color, font, radius } from "../theme/tokens";
 import { Text } from "./Text";
 
-export type PillTone = "gold" | "indigo" | "green" | "amber" | "red" | "neutral";
+export type PillTone = "accent" | "indigo" | "green" | "amber" | "red" | "neutral";
 
 const tones: Record<PillTone, { bg: string; fg: string; dot: string }> = {
-  gold: { bg: color.goldSoft, fg: color.goldText, dot: color.gold },
+  accent: { bg: color.accentSoft, fg: color.accentText, dot: color.accent },
   indigo: { bg: color.indigoTint, fg: color.indigo, dot: color.indigo },
   green: { bg: color.greenSoft, fg: color.green, dot: color.greenBright },
   amber: { bg: color.amberSoft, fg: color.amber, dot: "#D97706" },

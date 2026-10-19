@@ -1,11 +1,11 @@
 import { Link } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSession } from "../../src/auth/session";
-import { errorMessage } from "../../src/api/client";
+import { api, errorMessage } from "../../src/api/client";
 import { color } from "../../src/theme/tokens";
 import { Button } from "../../src/ui/Button";
-import { ErrorNote, Segmented } from "../../src/ui/bits";
+import { Chips, ErrorNote, Segmented } from "../../src/ui/bits";
 import { Field } from "../../src/ui/Field";
 import { FadeIn } from "../../src/ui/motion";
 import { Screen } from "../../src/ui/Screen";
@@ -20,6 +20,12 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [rollNo, setRollNo] = useState("");
   const [hostel, setHostel] = useState("");
+  const [hostelId, setHostelId] = useState("");
+  // The college's hostels, when it has set them up; otherwise students type it.
+  const [hostels, setHostels] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    api.hostels().then(setHostels).catch(() => setHostels([]));
+  }, []);
   const [room, setRoom] = useState("");
   const [dob, setDob] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +45,7 @@ export default function RegisterScreen() {
         password,
         phone: phone.trim() || undefined,
         ...(role === "STUDENT"
-          ? { rollNo: rollNo.trim() || undefined, hostel: hostel.trim() || undefined, room: room.trim() || undefined, dateOfBirth: dob || undefined }
+          ? { rollNo: rollNo.trim() || undefined, hostelId: hostelId || undefined, hostel: hostelId ? undefined : hostel.trim() || undefined, room: room.trim() || undefined, dateOfBirth: dob || undefined }
           : {}),
       });
     } catch (err) {
@@ -50,7 +56,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen title="Create account" eyebrow="Arvio" back footer={<Button label="Create account" loading={submitting} onPress={onSubmit} />}>
+    <Screen title="Create account" eyebrow="Outpass" back footer={<Button label="Create account" loading={submitting} onPress={onSubmit} />}>
       <FadeIn>
         <Segmented options={[{ value: "STUDENT", label: "I'm a student" }, { value: "PARENT", label: "I'm a parent" }]} value={role} onChange={setRole} />
       </FadeIn>
@@ -64,10 +70,20 @@ export default function RegisterScreen() {
         <FadeIn index={2} style={{ gap: 14 }}>
           <Text variant="eyebrow" style={{ marginTop: 4 }}>Hostel details</Text>
           <Field label="Roll number" value={rollNo} onChangeText={setRollNo} autoCapitalize="characters" placeholder="e.g. 21CS104" />
-          <View style={styles.row}>
-            <View style={{ flex: 1.4 }}><Field label="Hostel" value={hostel} onChangeText={setHostel} placeholder="Block C" /></View>
-            <View style={{ flex: 1 }}><Field label="Room" value={room} onChangeText={setRoom} placeholder="214" /></View>
-          </View>
+          {hostels.length ? (
+            <>
+              <View style={{ gap: 6 }}>
+                <Text variant="label">Hostel</Text>
+                <Chips options={hostels.map((h) => ({ value: h.id, label: h.name }))} value={hostelId} onChange={setHostelId} />
+              </View>
+              <Field label="Room" value={room} onChangeText={setRoom} placeholder="214" />
+            </>
+          ) : (
+            <View style={styles.row}>
+              <View style={{ flex: 1.4 }}><Field label="Hostel" value={hostel} onChangeText={setHostel} placeholder="Block C" /></View>
+              <View style={{ flex: 1 }}><Field label="Room" value={room} onChangeText={setRoom} placeholder="214" /></View>
+            </View>
+          )}
           <Field label="Date of birth" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" hint="Decides whether parent approval is needed once you're 18" />
         </FadeIn>
       ) : (

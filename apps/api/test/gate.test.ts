@@ -119,7 +119,8 @@ describe("gate", () => {
       headers: auth(guard.token),
       payload: { eventId: randomUUID(), outpassId: pass.id, direction: "EXIT", gate: "Main gate", method: "QR", photoMatched: true },
     });
-    await prisma.outpass.update({ where: { id: pass.id }, data: { returnBy: new Date(Date.now() - 60_000) } });
+    // Far in the past, so it heads the (capped, most-overdue-first) list however much old test data there is.
+    await prisma.outpass.update({ where: { id: pass.id }, data: { returnBy: new Date(Date.now() - 10 * 365 * 86_400_000) } });
 
     const summary = (await app.inject({ method: "GET", url: "/dashboard/summary", headers: auth(warden.token) })).json();
     expect(summary.overdue).toBeGreaterThanOrEqual(1);

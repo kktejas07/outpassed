@@ -18,6 +18,7 @@ export function VisitorsScreen() {
       eyebrow={user?.role === "STUDENT" ? "People coming to see you" : "Guests, vendors, parents"}
       refreshing={vm.refreshing}
       onRefresh={vm.refresh}
+      bell
       right={<Button compact icon="add" label="Invite" onPress={() => router.push("/visit/new")} />}
     >
       <Segmented
@@ -41,7 +42,7 @@ export function VisitorsScreen() {
             {v.status === "PENDING_HOST" && v.host.id === user?.id ? (
               <View style={styles.actions}>
                 <Button compact style={{ flex: 1 }} tone="danger" label="Decline" loading={vm.deciding} onPress={() => vm.decide(v.id, "REJECT")} />
-                <Button compact style={{ flex: 1 }} tone="gold" label="Let them in" loading={vm.deciding} onPress={() => vm.decide(v.id, "APPROVE")} />
+                <Button compact style={{ flex: 1 }} tone="accent" label="Let them in" loading={vm.deciding} onPress={() => vm.decide(v.id, "APPROVE")} />
               </View>
             ) : null}
           </VisitCard>
