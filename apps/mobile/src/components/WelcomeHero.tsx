@@ -43,18 +43,16 @@ export function WelcomeHero() {
       </View>
 
       <View style={styles.brandRow}>
-        <Mark size={30} />
+        <Mark size={30} inverse />
         <Text style={styles.brand}>outpass</Text>
       </View>
 
-      {/* The gate */}
+      {/* The mark drawn large as a scanner frame, with a pass being let out */}
       <View style={styles.scene} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Animated.View style={[styles.arch, { opacity: gate, transform: [{ translateY: gate.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}>
-          <View style={styles.keystone} />
-          <View style={styles.road} />
+        <Animated.View style={{ opacity: gate, transform: [{ scale: gate.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }}>
+          <Mark size={210} bare />
         </Animated.View>
 
-        {/* A pass, as the guard sees it */}
         <Animated.View
           style={[
             styles.pass,
@@ -71,11 +69,7 @@ export function WelcomeHero() {
           </View>
         </Animated.View>
 
-        <Animated.View style={[styles.tick, { opacity: tick, transform: [{ scale: tick.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>
-          <Ionicons name="checkmark" size={26} color={color.white} />
-        </Animated.View>
-
-        <Animated.View style={[styles.time, { opacity: card }]}>
+        <Animated.View style={[styles.time, { opacity: tick, transform: [{ scale: tick.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]}>
           <Ionicons name="time-outline" size={14} color={color.indigoDeep} />
           <Text style={styles.timeText}>Back by 7:30 PM</Text>
         </Animated.View>
@@ -95,19 +89,15 @@ const styles = StyleSheet.create({
   glow: { position: "absolute", backgroundColor: "rgba(255,255,255,0.07)" },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   brand: { fontFamily: font.display, fontSize: 20, color: color.white, letterSpacing: -0.4 },
-  scene: { height: 220, alignItems: "center", justifyContent: "flex-end", marginTop: 4 },
-  arch: { width: 170, height: 190, borderTopLeftRadius: 85, borderTopRightRadius: 85, borderWidth: 20, borderBottomWidth: 0, borderColor: "rgba(255,255,255,0.92)", alignItems: "center" },
-  keystone: { position: "absolute", top: -34, width: 26, height: 26, borderRadius: 4, backgroundColor: color.accentLight, transform: [{ rotate: "45deg" }] },
-  road: { position: "absolute", bottom: 0, width: 70, height: 110, backgroundColor: "rgba(255,255,255,0.1)", borderTopLeftRadius: 35, borderTopRightRadius: 35 },
-  pass: { position: "absolute", left: 4, bottom: 46, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: color.white, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+  scene: { height: 214, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  pass: { position: "absolute", left: 0, bottom: 2, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: color.white, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
   passAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: color.indigoTint, alignItems: "center", justifyContent: "center" },
   passInitials: { fontFamily: font.displaySemi, fontSize: 13, color: color.indigo },
   passName: { fontFamily: font.bodyBold, fontSize: 13.5, color: color.ink },
   passRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   passDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: color.accentLight },
   passMeta: { fontFamily: font.bodySemi, fontSize: 12, color: color.accentText },
-  tick: { position: "absolute", right: 34, top: 18, width: 52, height: 52, borderRadius: 26, backgroundColor: color.accentLight, alignItems: "center", justifyContent: "center", borderWidth: 4, borderColor: color.indigo },
-  time: { position: "absolute", right: 0, bottom: 14, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, height: 32, borderRadius: radius.pill, backgroundColor: color.white },
+  time: { position: "absolute", right: 0, top: 4, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, height: 32, borderRadius: radius.pill, backgroundColor: color.white },
   timeText: { fontFamily: font.bodyBold, fontSize: 12.5, color: color.indigoDeep },
   headline: { fontFamily: font.display, fontSize: 30, lineHeight: 36, color: color.white, letterSpacing: -0.7 },
   sub: { fontFamily: font.body, fontSize: 14.5, lineHeight: 21, color: "#E0E7FF" },

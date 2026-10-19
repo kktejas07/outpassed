@@ -56,7 +56,7 @@
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#14B8A6"
+        "backgroundColor": "#4338CA"
       },
       "permissions": [
         "android.permission.CAMERA"

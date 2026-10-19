@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="icon" href="/app/favicon.ico">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/app/favicon.ico">
 <title>Outpass</title>
 <meta name="description" content="Outpass runs your campus gate: student outpasses approved by faculty, parents and wardens, live QR gate passes, visitor management, fees and campus life, for colleges, hostels and schools.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -95,27 +96,26 @@ header .btn { height: 42px; padding: 0 18px; font-size: 14.5px; }
 .hero .lead { margin-top: 20px; font-size: 18px; color: var(--on-brand-muted); max-width: 52ch; }
 .hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
 .hero .for { margin: 22px 0 56px; font-size: 14px; color: var(--on-brand-muted); }
-.hero-art { position: relative; min-height: 380px; align-self: end; }
-.gate { position: absolute; left: 50%; bottom: 0; width: 250px; height: 300px; transform: translateX(-50%); border: 30px solid rgba(255,255,255,.94); border-bottom: 0; border-radius: 125px 125px 0 0; }
-.gate::before { content: ""; position: absolute; left: 50%; top: -52px; width: 34px; height: 34px; background: var(--teal-light); border-radius: 6px; transform: translateX(-50%) rotate(45deg); }
-.gate::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 100px; height: 170px; transform: translateX(-50%); background: rgba(255,255,255,.1); border-radius: 50px 50px 0 0; }
+.hero-art { position: relative; min-height: 400px; align-self: center; margin-bottom: 24px; }
+.frame { position: absolute; left: 50%; top: 50%; width: 330px; height: 330px; transform: translate(-50%, -48%); }
 .float { position: absolute; background: #FFFFFF; color: var(--ink); border-radius: 18px; box-shadow: 0 20px 40px -18px rgba(0,0,0,.45); display: flex; align-items: center; gap: 12px; padding: 12px 16px; font-size: 14px; }
 .float b { display: block; font-size: 14.5px; }
 .float small { color: var(--teal); font-weight: 700; font-size: 12.5px; }
 .float .av { width: 38px; height: 38px; border-radius: 50%; background: var(--brand-tint); color: var(--brand); display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 14px; }
 .f1 { left: 0; bottom: 120px; transform: rotate(-5deg); }
 .f2 { right: 0; bottom: 34px; }
+.f3 { right: 6%; top: 30px; padding: 10px 14px; color: var(--brand-deep); }
 .f2 .dots { display: flex; }
 .f2 .dots span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; margin-left: -8px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--brand); background: var(--brand-tint); }
 .f2 .dots span:first-child { margin-left: 0; }
-.tick { position: absolute; right: 18%; top: 34px; width: 64px; height: 64px; border-radius: 50%; background: var(--teal-light); border: 5px solid var(--brand); display: grid; place-items: center; }
-.hero-art .float, .hero-art .tick { animation: settle .7s cubic-bezier(.2,.8,.2,1) both; }
-.hero-art .f2 { animation-delay: .15s; } .hero-art .tick { animation-delay: .3s; }
+/* One entrance: the cards settle in after the page loads. */
+.hero-art .float { animation: settle .7s cubic-bezier(.2,.8,.2,1) both; }
+.hero-art .f2 { animation-delay: .15s; } .hero-art .f3 { animation-delay: .3s; }
 @keyframes settle { from { opacity: 0; translate: 0 16px; } to { opacity: 1; translate: 0 0; } }
 @media (max-width: 900px) {
   .hero-panel { grid-template-columns: 1fr; padding: 40px 24px 0; border-radius: 28px; }
   .hero-art { min-height: 320px; }
-  .gate { width: 200px; height: 240px; border-width: 24px; }
+  .frame { width: 260px; height: 260px; }
   .f1 { left: -4px; bottom: 96px; } .f2 { right: -4px; }
 }
 
@@ -232,7 +232,7 @@ footer { margin-top: 96px; background: var(--footer); color: var(--footer-ink); 
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#top" aria-label="Outpass home">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#14B8A6"/><path d="M20 58V32a12 12 0 0 1 24 0v26" fill="none" stroke="#1E1B4B" stroke-width="6.5"/><rect x="27.5" y="16" width="9" height="9" rx="2" transform="rotate(45 32 20.5)" fill="#FFFFFF"/></svg>
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#4338CA"/><rect x="10" y="10" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="15.5" y="15.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><rect x="37" y="10" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="42.5" y="15.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><rect x="10" y="37" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="15.5" y="42.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><path d="M38.5 38.5 L52 52" stroke="#14B8A6" stroke-width="6" stroke-linecap="round"/><path d="M42 52.5 H52.5 V42" fill="none" stroke="#14B8A6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       outpass
     </a>
     <nav class="links" aria-label="Sections">
@@ -260,10 +260,10 @@ footer { margin-top: 96px; background: var(--footer); color: var(--footer-ink); 
           <p class="for">For colleges, hostels and schools. On iPhone, Android and the web.</p>
         </div>
         <div class="hero-art" aria-hidden="true">
-          <div class="gate"></div>
+          <svg class="frame" viewBox="0 0 64 64"><rect x="10" y="10" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="15.5" y="15.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><rect x="37" y="10" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="42.5" y="15.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><rect x="10" y="37" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="15.5" y="42.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><path d="M38.5 38.5 L52 52" stroke="#14B8A6" stroke-width="6" stroke-linecap="round"/><path d="M42 52.5 H52.5 V42" fill="none" stroke="#14B8A6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="float f1"><span class="av">AR</span><span><b>Asha Rao</b><small>● Exit allowed</small></span></div>
           <div class="float f2"><span class="dots"><span>AS</span><span>LR</span><span>SN</span></span><span><b>Approved</b>Faculty, parent, warden</span></div>
-          <div class="tick"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <div class="float f3"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b>Back by 7:30 PM</b></div>
         </div>
       </div>
     </div>
@@ -452,7 +452,7 @@ footer { margin-top: 96px; background: var(--footer); color: var(--footer-ink); 
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="#top" aria-label="Outpass home">
-          <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#14B8A6"/><path d="M20 58V32a12 12 0 0 1 24 0v26" fill="none" stroke="#1E1B4B" stroke-width="6.5"/><rect x="27.5" y="16" width="9" height="9" rx="2" transform="rotate(45 32 20.5)" fill="#FFFFFF"/></svg>
+          <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="18" fill="#4338CA"/><rect x="10" y="10" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="15.5" y="15.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><rect x="37" y="10" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="42.5" y="15.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><rect x="10" y="37" width="17" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><rect x="15.5" y="42.5" width="6" height="6" rx="1.5" fill="#FFFFFF"/><path d="M38.5 38.5 L52 52" stroke="#14B8A6" stroke-width="6" stroke-linecap="round"/><path d="M42 52.5 H52.5 V42" fill="none" stroke="#14B8A6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           outpass
         </a>
         <p>Outpasses, visitors and the gate log for colleges, hostels and schools.</p>
