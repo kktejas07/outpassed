@@ -5,6 +5,9 @@ import type { ImportResult, ImportRow } from "@outpassed/shared";
 import { parseCsv } from "./csv";
 import { ensureHostel } from "./hostels";
 import { sendMail } from "./mailer";
+import { background } from "./notify";
+import { env } from "../env";
+import { sendWhatsApp, whatsappEnabled } from "./whatsapp";
 import { phoneFields } from "./phone";
 import { prisma } from "./prisma";
 
@@ -182,13 +185,16 @@ export async function importStudents(csv: string, opts: { dryRun: boolean; sendW
             text: `Hi ${r.name},\n\nYour college has set up Outpass for you. Open the app, tap "Forgot password" and enter ${studentEmail} to choose your password${phone.phoneNormalized ? `, or sign in with a code sent to ${phone.phone}` : ""}.\n\nYou'll use Outpass for outpasses, visitors and parcels at the gate.`,
           }).catch(() => undefined);
         }
+        if (opts.sendWelcome && phone.phoneNormalized) welcomeOnWhatsApp(phone.phoneNormalized, r.name, "student");
       }
       if (parentKey) {
         if (!parentId) {
-          const p =
+          const existingParent =
             (parentEmail ? await prisma.user.findUnique({ where: { email: parentEmail } }) : null) ??
-            (parentPhone.phoneNormalized ? await prisma.user.findFirst({ where: { phoneNormalized: parentPhone.phoneNormalized, role: "PARENT" } }) : null) ??
-            (await prisma.user.create({
+            (parentPhone.phoneNormalized ? await prisma.user.findFirst({ where: { phoneNormalized: parentPhone.phoneNormalized, role: "PARENT" } }) : null);
+          if (existingParent) parentId = existingParent.id;
+          else {
+            const created = await prisma.user.create({
               data: {
                 email: parentEmail || placeholderEmail(parentPhone.phoneNormalized!),
                 passwordHash: await unusablePassword(),
@@ -196,8 +202,10 @@ export async function importStudents(csv: string, opts: { dryRun: boolean; sendW
                 role: "PARENT",
                 ...parentPhone,
               },
-            }));
-          parentId = p.id;
+            });
+            parentId = created.id;
+            if (opts.sendWelcome && parentPhone.phoneNormalized) welcomeOnWhatsApp(parentPhone.phoneNormalized, created.name, "parent", r.name);
+          }
         }
         await prisma.guardianship.upsert({
           where: { studentId_parentId: { studentId, parentId } },
@@ -218,3 +226,14 @@ export async function importStudents(csv: string, opts: { dryRun: boolean; sendW
   return { dryRun: opts.dryRun, rows, summary };
 }
 
+
+/** "Your account is ready": sign in with a WhatsApp code to this number. */
+function welcomeOnWhatsApp(to: string, name: string, who: "student" | "parent", child?: string) {
+  if (!whatsappEnabled()) return;
+  const app = `${env.PUBLIC_WEB_URL.replace(/\/+$/, "")}/app`;
+  const text =
+    who === "student"
+      ? `Hi ${name.split(" ")[0]}, your college has set up *Outpass* for you: outpasses, visitors and parcels at the gate.\n\nGet the app or open ${app} and sign in with this number. We'll send you a code here.`
+      : `Hello ${name}, ${child}'s college uses *Outpass*. You'll get a message here when ${child} asks to go out, leaves and returns to campus, and can approve requests from the app.\n\nSign in at ${app} with this number. We'll send you a code here.`;
+  background(() => sendWhatsApp({ to, text, kind: "WELCOME", title: "Your Outpass account is ready", body: text }), "welcome whatsapp");
+}

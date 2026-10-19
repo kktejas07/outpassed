@@ -20,9 +20,10 @@ says how to tell it worked.
    | `SMTP_URL` / `MAIL_FROM` | your mail provider; **required**, password reset fails without it in production |
    | `ADULT_PARENT_MODE` | `approve` or `notify_only` |
    | `SETUP_TOKEN` | `openssl rand -base64 24`; needed once for first-time setup, remove afterwards |
-   | `SMS_PROVIDER` | `msg91` (India) or `twilio`; **required** for phone sign-in in production |
-   | `MSG91_AUTH_KEY` / `MSG91_TEMPLATE_ID` | MSG91 key and a DLT-approved OTP template with an `otp` variable |
-   | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | if using Twilio instead |
+   | `WHATSAPP_MODE` | `webhook` for your own WhatsApp server (or `evolution`, `waha`, `cloud`); **required** for sign-in codes and alerts |
+   | `WHATSAPP_URL` / `WHATSAPP_TOKEN` | your server's send endpoint and its key |
+   | `WHATSAPP_ALERTS` | `all`, or the list of alert kinds to send |
+   | `SMS_PROVIDER` + MSG91/Twilio keys | only if you switch codes to SMS (`OTP_CHANNEL=sms`) |
    | `JWT_EXPIRES_IN` | leave at `15m`; the app renews tokens itself |
 
    Attach `api.outpassed.studentalumni.ai` on port 3000. Migrations run on boot.

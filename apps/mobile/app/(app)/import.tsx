@@ -107,7 +107,7 @@ export default function ImportStudents() {
           <Text variant="heading">Spreadsheet (CSV)</Text>
           <Text variant="caption">
             Save your class list as CSV. Columns: name, rollNo, and email or phone. Optional: hostel, room, dateOfBirth, parentName, parentEmail, parentPhone, relation.
-            Students sign in with a code texted to their phone, or set a password with “Forgot password”.
+            Students and parents sign in with a code sent to their WhatsApp, or set a password with “Forgot password”.
           </Text>
           <Button tone="outline" icon="document-attach-outline" label={vm.fileName ? `Loaded ${vm.fileName}` : "Choose a CSV file"} onPress={() => void pickFile()} />
           <Field
@@ -126,8 +126,8 @@ export default function ImportStudents() {
           />
           <View style={styles.toggle}>
             <View style={{ flex: 1 }}>
-              <Text variant="label">Email new students</Text>
-              <Text variant="caption">Tells them how to sign in for the first time.</Text>
+              <Text variant="label">Send welcome messages</Text>
+              <Text variant="caption">On WhatsApp (and email), telling new students and parents how to sign in.</Text>
             </View>
             <Switch value={vm.sendWelcome} onValueChange={vm.setSendWelcome} trackColor={{ true: color.indigo, false: color.line }} />
           </View>

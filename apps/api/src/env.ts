@@ -40,7 +40,29 @@ const envSchema = z.object({
   MAIL_FROM: z.string().default("Outpass <no-reply@outpassed.studentalumni.ai>"),
   /** Required to run first-time setup in production. */
   SETUP_TOKEN: z.string().min(12).optional(),
-  /** SMS for phone sign-in codes: console (development), msg91 or twilio. */
+  /**
+   * WhatsApp, the main channel for sign-in codes and alerts. "webhook" posts
+   * { to, text, kind, code } to your own server; evolution, waha and cloud
+   * speak those APIs directly; "off" prints messages in development.
+   */
+  WHATSAPP_MODE: z.enum(["off", "webhook", "evolution", "waha", "cloud"]).default("off"),
+  /** Your server's address: the full webhook URL, or the Evolution / WAHA base URL. */
+  WHATSAPP_URL: z.string().url().optional(),
+  /** Sent as Bearer (webhook, cloud), apikey (evolution) or X-Api-Key (waha). */
+  WHATSAPP_TOKEN: z.string().optional(),
+  /** Evolution instance name or WAHA session name. */
+  WHATSAPP_INSTANCE: z.string().default("default"),
+  /** Meta Cloud API: phone number id and approved template names. */
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_OTP_TEMPLATE: z.string().optional(),
+  /** Template with two body variables: {{1}} title, {{2}} message. Needed outside the 24-hour window. */
+  WHATSAPP_ALERT_TEMPLATE: z.string().optional(),
+  WHATSAPP_TEMPLATE_LANG: z.string().default("en"),
+  /** Which alerts also go to WhatsApp: "all", "none", or a comma list of kinds (e.g. STUDENT_LEFT,SOS_RAISED). */
+  WHATSAPP_ALERTS: z.string().default("all"),
+  /** Where sign-in codes go: whatsapp (default) or sms. */
+  OTP_CHANNEL: z.enum(["whatsapp", "sms"]).default("whatsapp"),
+  /** SMS (fallback) for phone sign-in codes: console (development), msg91 or twilio. */
   SMS_PROVIDER: z.enum(["console", "msg91", "twilio"]).default("console"),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_TEMPLATE_ID: z.string().optional(),

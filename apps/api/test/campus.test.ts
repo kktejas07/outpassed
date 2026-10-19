@@ -5,7 +5,8 @@ import { buildApp } from "../src/app";
 import { normalizePhone } from "../src/lib/phone";
 import { parseCsv } from "../src/lib/csv";
 import { prisma } from "../src/lib/prisma";
-import { testSmsOutbox } from "../src/lib/sms";
+import { buildWhatsAppRequest, testWhatsAppOutbox as testSmsOutbox } from "../src/lib/whatsapp";
+import { drainNotifications } from "../src/lib/notify";
 import { auth, hours, linkGuardian, makeUser, uniqueEmail } from "./helpers/setup";
 
 let app: FastifyInstance;
@@ -286,5 +287,65 @@ describe("cors", () => {
     const res = await app.inject({ method: "OPTIONS", url: "/me/photo", headers: { origin: "http://localhost:8082", "access-control-request-method": "PUT" } });
     expect(res.headers["access-control-allow-methods"]).toMatch(/PUT/);
     expect(res.headers["access-control-allow-methods"]).toMatch(/DELETE/);
+  });
+});
+
+describe("whatsapp", () => {
+  const cfg = { WHATSAPP_URL: "https://wa.example.org/", WHATSAPP_TOKEN: "secret", WHATSAPP_INSTANCE: "outpass", WHATSAPP_PHONE_NUMBER_ID: "123", WHATSAPP_OTP_TEMPLATE: "outpass_otp", WHATSAPP_ALERT_TEMPLATE: "outpass_alert", WHATSAPP_TEMPLATE_LANG: "en" };
+  const msg = { to: "+919848012345", text: "Hello", kind: "STUDENT_LEFT", title: "Asha left campus", body: "Went out at 5 PM" };
+
+  it("builds requests for each kind of server", () => {
+    const hook = buildWhatsAppRequest("webhook", { ...msg, code: "123456", kind: "OTP" }, cfg);
+    expect(hook.url).toBe("https://wa.example.org/");
+    expect(hook.headers.authorization).toBe("Bearer secret");
+    expect(hook.body).toMatchObject({ to: "+919848012345", phone: "919848012345", kind: "OTP", code: "123456" });
+
+    const evo = buildWhatsAppRequest("evolution", msg, cfg);
+    expect(evo.url).toBe("https://wa.example.org/message/sendText/outpass");
+    expect(evo.headers.apikey).toBe("secret");
+    expect(evo.body).toEqual({ number: "919848012345", text: "Hello" });
+
+    const waha = buildWhatsAppRequest("waha", msg, cfg);
+    expect(waha.url).toBe("https://wa.example.org/api/sendText");
+    expect(waha.body).toEqual({ session: "outpass", chatId: "919848012345@c.us", text: "Hello" });
+
+    const otp = buildWhatsAppRequest("cloud", { ...msg, code: "123456" }, cfg).body as { template: { name: string; components: { parameters: { text: string }[] }[] } };
+    expect(otp.template.name).toBe("outpass_otp");
+    expect(otp.template.components[0]!.parameters[0]!.text).toBe("123456");
+    const alert = buildWhatsAppRequest("cloud", msg, cfg).body as { template: { name: string; components: { parameters: { text: string }[] }[] } };
+    expect(alert.template.name).toBe("outpass_alert");
+    expect(alert.template.components[0]!.parameters.map((p) => p.text)).toEqual(["Asha left campus", "Went out at 5 PM"]);
+  });
+
+  it("tells a parent on WhatsApp when their child asks to go out", async () => {
+    const parentPhone = mobile();
+    const student = await makeUser(app, "STUDENT", { rollNo: `W${tag()}` });
+    const parent = await makeUser(app, "PARENT", { phone: parentPhone });
+    await linkGuardian(student.id, parent.id);
+    const before = testSmsOutbox.length;
+    const pass = (await app.inject({ method: "POST", url: "/outpasses", headers: auth(student.token), payload: { type: "HOME", destination: "Vijayawada", reason: "Festival", leaveAt: hours(1), returnBy: hours(30) } })).json();
+    await drainNotifications();
+    const sent = testSmsOutbox.slice(before).find((m) => m.to === `+91${parentPhone}`);
+    expect(sent?.kind).toBe("OUTPASS_NEEDS_PARENT");
+    expect(sent?.text).toContain("Vijayawada");
+    expect(sent?.text).toContain(`/app/outpass/${pass.id}`);
+  });
+
+  it("sends the visitor their pass link", async () => {
+    const host = await makeUser(app, "STUDENT");
+    const visitorPhone = mobile();
+    const before = testSmsOutbox.length;
+    const res = await app.inject({
+      method: "POST",
+      url: "/visits",
+      headers: auth(host.token),
+      payload: { visitorName: "Ravi Kumar", visitorPhone, purpose: "Weekend visit", validFrom: hours(1), validTo: hours(4) },
+    });
+    expect(res.statusCode).toBe(201);
+    await drainNotifications();
+    const sent = testSmsOutbox.slice(before).find((m) => m.to === `+91${visitorPhone}`);
+    expect(sent?.kind).toBe("VISITOR_PASS");
+    expect(sent?.text).toContain(res.json().code);
+    expect(sent?.text).toContain("/app/pass/");
   });
 });

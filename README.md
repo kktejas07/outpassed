@@ -120,15 +120,26 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 
 **Sign-in and sessions**
 
-- Students and parents can sign in with a code texted to the phone number the
-  college has on file (`SMS_PROVIDER=msg91` or `twilio`), or with email and
-  password.
+- Students and parents can sign in with a code sent on **WhatsApp** to the
+  phone number the college has on file, or with email and password. (SMS is a
+  fallback: `OTP_CHANNEL=sms`.)
 - Access tokens last 15 minutes. The app renews them with a refresh token
   that works once; if an old one is presented again, every session from that
   sign-in ends. Resetting a password signs out all devices.
 - Sign-in, code and gate routes are rate-limited per address
   (`@fastify/rate-limit`), and every response carries security headers
   (`@fastify/helmet`).
+
+**WhatsApp**
+
+- WhatsApp is the main channel. Every alert (parent approvals, left/returned,
+  overdue, SOS, parcels, notices) goes to the recipient's WhatsApp as well as
+  the in-app inbox and push, with a link that opens the right screen. Visitors
+  get their pass link and 6-digit code on WhatsApp the moment they're invited,
+  and imported students and parents get a welcome message.
+- `WHATSAPP_MODE=webhook` posts `{ to, phone, text, kind, code }` to your own
+  WhatsApp server. Evolution API, WAHA and Meta's Cloud API are also
+  supported directly. `WHATSAPP_ALERTS` picks which alerts go out.
 
 **Photos at the gate**
 

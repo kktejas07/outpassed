@@ -1,11 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { env } from "../env";
 import { prisma } from "./prisma";
+import { alertGoesToWhatsApp, linkFor, sendWhatsApp } from "./whatsapp";
 
 /**
  * Notifications: every event is saved to the recipient's in-app inbox and,
  * when they have the app installed with notifications allowed, sent as a
- * phone push through Expo's push service.
+ * phone push through Expo's push service. It also goes to WhatsApp on the
+ * user's phone number (see WHATSAPP_ALERTS), which reaches parents who never
+ * install the app.
  */
 
 export type NotificationKind =
@@ -85,6 +88,21 @@ export async function notify(userIds: string[], n: NotificationInput): Promise<v
       data: (n.data ?? undefined) as Prisma.InputJsonValue | undefined,
     })),
   });
+  await Promise.all([sendPush(unique, n), sendWhatsAppAlerts(unique, n)]);
+}
+
+async function sendWhatsAppAlerts(userIds: string[], n: NotificationInput) {
+  if (!alertGoesToWhatsApp(n.kind)) return;
+  const users = await prisma.user.findMany({ where: { id: { in: userIds }, phoneNormalized: { not: null } }, select: { phoneNormalized: true } });
+  const link = linkFor(n.data);
+  const text = `*${n.title}*\n${n.body}${link ? `\n\n${link}` : ""}`;
+  // One number can belong to two accounts (a parent who is also staff): send once.
+  for (const phone of new Set(users.map((u) => u.phoneNormalized!))) {
+    await sendWhatsApp({ to: phone, text, kind: n.kind, title: n.title, body: n.body }).catch((err) => console.warn("whatsapp alert failed", err));
+  }
+}
+
+async function sendPush(unique: string[], n: NotificationInput) {
   if (!env.PUSH_ENABLED) return;
   const tokens = await prisma.pushToken.findMany({ where: { userId: { in: unique } }, select: { token: true } });
   if (tokens.length === 0) return;
@@ -105,6 +123,15 @@ const pending = new Set<Promise<void>>();
 export function notifyLater(userIds: string[], n: NotificationInput) {
   const p = notify(userIds, n)
     .catch((err) => console.warn("notify failed", err))
+    .finally(() => pending.delete(p));
+  pending.add(p);
+}
+
+/** Runs any side job (e.g. a WhatsApp send) in the background, tracked like notifications. */
+export function background(job: () => Promise<unknown>, label = "background job") {
+  const p = job()
+    .then(() => undefined)
+    .catch((err) => console.warn(`${label} failed`, err))
     .finally(() => pending.delete(p));
   pending.add(p);
 }

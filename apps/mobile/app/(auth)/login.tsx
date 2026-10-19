@@ -87,7 +87,7 @@ export default function LoginScreen() {
               keyboardType="phone-pad"
               autoComplete="tel"
               placeholder="98480 12345"
-              hint={codeSent ? undefined : "The number your college has on file. We'll text you a code."}
+              hint={codeSent ? undefined : "The number your college has on file. We'll send you a code on WhatsApp."}
             />
             {codeSent ? (
               <>
@@ -110,7 +110,7 @@ export default function LoginScreen() {
             ) : (
               <>
                 {error ? <ErrorNote message={error} /> : null}
-                <Button label="Text me a code" icon="chatbubble-ellipses-outline" loading={submitting} disabled={phone.replace(/\D/g, "").length < 10} onPress={sendCode} />
+                <Button label="Send code on WhatsApp" icon="logo-whatsapp" loading={submitting} disabled={phone.replace(/\D/g, "").length < 10} onPress={sendCode} />
               </>
             )}
           </>

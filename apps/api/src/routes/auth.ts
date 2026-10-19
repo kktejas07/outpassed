@@ -14,6 +14,8 @@ import { ensureHostel } from "../lib/hostels";
 import { normalizePhone, phoneFields } from "../lib/phone";
 import { endSession, issueSession, rotateSession } from "../lib/session";
 import { sendSms } from "../lib/sms";
+import { sendWhatsApp } from "../lib/whatsapp";
+import { env } from "../env";
 import { sendMail } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
 import { toUserDto } from "../lib/dto";
@@ -117,10 +119,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         await prisma.otpCode.create({
           data: { phone: normalized, codeHash: hashCode(normalized, code), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
         });
-        await sendSms({ to: normalized, code, text: `${code} is your Outpass sign-in code. It expires in 10 minutes. Don't share it with anyone.` });
+        const text = `${code} is your Outpass sign-in code. It expires in 10 minutes. Don't share it with anyone.`;
+        if (env.OTP_CHANNEL === "whatsapp") await sendWhatsApp({ to: normalized, code, text, kind: "OTP" });
+        else await sendSms({ to: normalized, code, text });
       }
     }
-    return { ok: true, message: "If that number has an account, we've texted a code to it." };
+    return {
+      ok: true,
+      channel: env.OTP_CHANNEL,
+      message: env.OTP_CHANNEL === "whatsapp" ? "If that number has an account, we've sent a code to it on WhatsApp." : "If that number has an account, we've texted a code to it.",
+    };
   });
 
   app.post("/auth/otp/verify", async (request) => {

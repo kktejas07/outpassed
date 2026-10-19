@@ -126,7 +126,7 @@ export const api = {
   resetPassword: (input: ResetPasswordInput) => request<AuthResponse>("/auth/reset", { method: "POST", body: input }),
   refresh: (refreshToken: string) => request<AuthResponse>("/auth/refresh", { method: "POST", body: { refreshToken } }),
   logout: (refreshToken: string) => request<void>("/auth/logout", { method: "POST", body: { refreshToken } }),
-  otpRequest: (phone: string) => request<{ ok: true; message: string }>("/auth/otp/request", { method: "POST", body: { phone } }),
+  otpRequest: (phone: string) => request<{ ok: true; message: string; channel?: "whatsapp" | "sms" }>("/auth/otp/request", { method: "POST", body: { phone } }),
   otpVerify: (phone: string, code: string) => request<AuthResponse>("/auth/otp/verify", { method: "POST", body: { phone, code } }),
 
   // First-time setup

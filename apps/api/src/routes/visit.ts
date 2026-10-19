@@ -13,7 +13,11 @@ import { FlowError } from "../domain/outpassFlow";
 import { issueQrToken } from "../domain/qrToken";
 import { prisma } from "../lib/prisma";
 import { toVisitDto, visitInclude } from "../lib/dto";
-import { notifyLater } from "../lib/notify";
+import { background, notifyLater } from "../lib/notify";
+import { normalizePhone } from "../lib/phone";
+import { sendWhatsApp, whatsappEnabled } from "../lib/whatsapp";
+import { passUrl } from "../lib/visitCode";
+import { when } from "../lib/time";
 import { newPassToken, newVisitCode } from "../lib/visitCode";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
@@ -66,6 +70,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
       },
       include: visitInclude,
     });
+    sendPassToVisitor(row);
     return reply.status(201).send(toVisitDto(row));
   });
 
@@ -150,6 +155,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     });
     if (changed.count === 0) throw new FlowError("CONFLICT", "This visit was just updated");
     const updated = await prisma.visit.findUniqueOrThrow({ where: { id }, include: visitInclude });
+    if (decision === "APPROVE") sendPassToVisitor(updated);
     if (updated.walkIn) {
       // Tell the guard who registered the walk-in.
       notifyLater([updated.registeredById], {
@@ -177,4 +183,12 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     };
     return response;
   });
+}
+
+/** Sends the visitor their pass link (QR + 6-digit code) on WhatsApp, so the host doesn't have to forward it. */
+function sendPassToVisitor(v: { visitorName: string; visitorPhone: string; code: string; passToken: string | null; validFrom: Date; validTo: Date; host: { name: string } }) {
+  const to = normalizePhone(v.visitorPhone);
+  if (!to || !v.passToken || !whatsappEnabled()) return;
+  const text = `Hi ${v.visitorName.split(" ")[0]}, ${v.host.name} has invited you to campus for ${when(v.validFrom)} – ${when(v.validTo)}.\n\nShow this pass at the gate, or tell the guard the code *${v.code}*:\n${passUrl(v.passToken)}`;
+  background(() => sendWhatsApp({ to, text, kind: "VISITOR_PASS", title: `Visitor pass from ${v.host.name}`, body: `Code ${v.code} · ${passUrl(v.passToken!)}` }), "visitor pass whatsapp");
 }
