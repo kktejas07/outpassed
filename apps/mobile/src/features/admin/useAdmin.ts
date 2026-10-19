@@ -25,12 +25,13 @@ export function useAddStaff(onDone: () => void) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"WARDEN" | "GUARD" | "ADMIN">("GUARD");
+  const [role, setRole] = useState<"WARDEN" | "GUARD" | "ADMIN" | "FACULTY">("GUARD");
+  const [departmentId, setDepartmentId] = useState("");
   const ribbon = useRibbon();
-  const action = useAction((t) => api.createStaff(t, { name: name.trim(), email: email.trim(), password, role }));
+  const action = useAction((t) => api.createStaff(t, { name: name.trim(), email: email.trim(), password, role, departmentId: role === "FACULTY" && departmentId ? departmentId : undefined }));
   const valid = name.trim() && /\S+@\S+\.\S+/.test(email) && password.length >= 8;
   return {
-    name, setName, email, setEmail, password, setPassword, role, setRole,
+    name, setName, email, setEmail, password, setPassword, role, setRole, departmentId, setDepartmentId,
     valid: !!valid,
     submit: async () => {
       if (!valid) return;

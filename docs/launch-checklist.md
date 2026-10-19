@@ -24,6 +24,8 @@ says how to tell it worked.
    | `WHATSAPP_URL` / `WHATSAPP_TOKEN` | your server's send endpoint and its key |
    | `WHATSAPP_ALERTS` | `all`, or the list of alert kinds to send |
    | `SMS_PROVIDER` + MSG91/Twilio keys | only if you switch codes to SMS (`OTP_CHANNEL=sms`) |
+   | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | from the college's Razorpay dashboard; leave unset and students pay at the office or upload a screenshot |
+   | `RAZORPAY_WEBHOOK_SECRET` | the secret you set on the Razorpay webhook (step 10) |
    | `JWT_EXPIRES_IN` | leave at `15m`; the app renews tokens itself |
 
    Attach `api.outpassed.studentalumni.ai` on port 3000. Migrations run on boot.
@@ -51,6 +53,15 @@ says how to tell it worked.
    key; after that, scanning works even when the gate has no signal.
 9. **Photos**: ask students to add a photo on the **Me** tab before the pilot
    starts (or upload them from the college ID database in **People**).
+10. **Departments and fees**: in **People → Departments** add each department,
+    pick its HOD, and add faculty in **People → Staff** with their department
+    (or use the `department` column in the student CSV). For online fee
+    payments, add a Razorpay webhook pointing at
+    `https://api.outpassed.studentalumni.ai/payments/razorpay/webhook` with the
+    `payment_link.paid` event.
+11. **Settings**: in **People → Settings** decide whether guards must photograph
+    every exit and entry, whether students 18+ see offers, and turn on
+    **School campus** for schools (hides offers and buy & sell).
 
 ## 2. Connect push notifications
 

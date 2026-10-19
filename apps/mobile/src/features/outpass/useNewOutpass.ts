@@ -1,8 +1,8 @@
 import type { OutpassType } from "@outpassed/shared";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { api } from "../../api/client";
-import { useAction } from "../../lib/useQuery";
+import { api, campus } from "../../api/client";
+import { useAction, useQuery } from "../../lib/useQuery";
 import { useRibbon } from "../../ui/Ribbon";
 
 export type LeavePreset = "now" | "1h" | "evening" | "tomorrow";
@@ -56,6 +56,10 @@ function returnDate(p: DurationPreset, leave: Date): Date {
 /** New outpass form: presets instead of date pickers, validated before submit. */
 export function useNewOutpass() {
   const [type, setTypeState] = useState<OutpassType>("LOCAL");
+  // Who gave permission: they approve first. Optional for colleges without faculty accounts.
+  const [facultyId, setFacultyId] = useState("");
+  const [facultyQuery, setFacultyQuery] = useState("");
+  const facultyList = useQuery((t) => campus.faculty(t));
   const [destination, setDestination] = useState("");
   const [reason, setReason] = useState("");
   const [leave, setLeave] = useState<LeavePreset>("now");
@@ -66,7 +70,7 @@ export function useNewOutpass() {
   const setType = (t: OutpassType) => {
     setTypeState(t);
     // Sensible default length per type.
-    setDuration(t === "HOME" ? "2d" : t === "MEDICAL" ? "6h" : "3h");
+    setDuration(t === "HOME" ? "2d" : t === "MEDICAL" ? "6h" : t === "EMERGENCY" ? "2d" : "3h");
   };
 
   const times = useMemo(() => {
@@ -87,8 +91,13 @@ export function useNewOutpass() {
       reason: reason.trim(),
       leaveAt: times.leaveAt.toISOString(),
       returnBy: times.returnBy.toISOString(),
+      facultyId: facultyId || undefined,
     }),
   );
+  const allFaculty = facultyList.data ?? [];
+  const q = facultyQuery.trim().toLowerCase();
+  const faculty = (q ? allFaculty.filter((f) => f.name.toLowerCase().includes(q) || f.department?.toLowerCase().includes(q)) : allFaculty).slice(0, 8);
+  const chosenFaculty = allFaculty.find((f) => f.id === facultyId) ?? null;
 
   async function submit() {
     setTouched(true);
@@ -99,12 +108,26 @@ export function useNewOutpass() {
       ribbon.show({
         tone: "success",
         title: "Request sent",
-        body: created.status === "PENDING_PARENT" ? "Your parent is asked first, then the warden." : "It's with the warden now.",
+        body:
+          created.status === "PENDING_FACULTY"
+            ? `${created.faculty?.name ?? "Your faculty"} approves first, then your parent and the warden.`
+            : created.status === "PENDING_PARENT"
+              ? "Your parent is asked first, then the warden."
+              : type === "EMERGENCY"
+                ? "The warden is deciding now. Your parents have been told."
+                : "It's with the warden now.",
       });
     }
   }
 
   return {
+    facultyId,
+    setFacultyId,
+    facultyQuery,
+    setFacultyQuery,
+    faculty,
+    hasFaculty: allFaculty.length > 0,
+    chosenFaculty,
     type, setType,
     destination, setDestination,
     reason, setReason,

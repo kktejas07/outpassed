@@ -34,3 +34,16 @@ export async function pickPhoto(source: "camera" | "library"): Promise<string | 
   if (!saved.base64) throw new Error("Couldn't read that photo. Try another one.");
   return saved.base64;
 }
+
+/** A screenshot or document photo (no square crop), shrunk to 1000 px wide. Returns base64 JPEG. */
+export async function pickDocument(): Promise<string | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
+  if (result.canceled || !result.assets[0]) return null;
+  const asset = result.assets[0];
+  const ctx = ImageManipulator.manipulate(asset.uri);
+  if ((asset.width || 0) > 1000) ctx.resize({ width: 1000 });
+  const image = await ctx.renderAsync();
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
+  if (!saved.base64) throw new Error("Couldn't read that image. Try another one.");
+  return saved.base64;
+}

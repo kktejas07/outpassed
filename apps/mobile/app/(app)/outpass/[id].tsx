@@ -134,7 +134,7 @@ export default function OutpassDetail() {
             <View style={styles.override}>
               <Ionicons name="shield-checkmark-outline" size={18} color={color.accentText} />
               <Text variant="caption" style={{ flex: 1, color: color.accentText }}>
-                The parent hasn't responded yet. Approving now overrides their step and is logged with your reason.
+                {p.status === "PENDING_FACULTY" ? "The faculty member hasn't responded yet." : "The parent hasn't responded yet."} Approving now overrides their step and is logged with your reason.
               </Text>
             </View>
           ) : null}

@@ -80,7 +80,9 @@ pnpm --filter @outpassed/api db:seed
 
 This creates one account per role, all with the password `outpass-demo-123`:
 `student@outpass.dev`, `parent@outpass.dev`, `warden@outpass.dev`, `guard@outpass.dev`
-and `admin@outpass.dev`, plus two more students (`karthik@`, `priya@`).
+and `admin@outpass.dev`, plus two more students (`karthik@`, `priya@`) and
+three faculty (`faculty@` is Dr. Ramesh Kumar, HOD of CSE; `anita@`, `vikram@`).
+It also seeds departments, fees, events, buy & sell listings and offers.
 It also creates passes in a few states: pending, approved, and out/overdue.
 Re-running it resets the demo activity.
 
@@ -184,6 +186,51 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
   **People**). The guard's verdict shows it large so they can compare faces;
   with no photo on file it says to check the college ID.
 
+**Faculty and HOD permission**
+
+- Each student and faculty member belongs to a department (**People →
+  Departments**, where the admin also picks the HOD).
+- A request asks *why* the student is going out (sick / medical, home or family
+  trip, academic, personal, local outing, emergency) and *who gave permission*.
+  That faculty member approves first, then the parent, then the warden.
+- The HOD is told about every pass from their department; the faculty member
+  and HOD also hear when the student leaves and comes back.
+- **Emergency** skips the faculty step and goes straight to the warden, with
+  the parent, faculty member and HOD alerted at once. A warden can decide a
+  pass still waiting on faculty, with a logged reason.
+
+**Photos at every exit and entry**
+
+- With **Settings → Photo at every exit and entry** on, the guard takes a photo
+  before *Let out* / *Let in*. If the camera fails they can skip; skips are logged.
+- Walk-in visitors: name and phone are required, ID / roll number is optional,
+  and a photo is taken. The guard picks the student **or faculty member** they
+  are visiting, and that person gets the alert with the photo.
+
+**Fees**
+
+- The office assigns a fee (hostel, mess, bus, tuition, exam, fine, other) to
+  all students, a hostel or a department (**People → Fees**).
+- Students and parents see what's due and can pay online (Razorpay payment
+  link) or upload a payment screenshot with the UTR for the office to check.
+  The office can also mark counter payments or waive a fee.
+- Reminders go out 3 days before, on the due day, then weekly while overdue
+  (parents are included once it's overdue).
+
+**Campus tab: events, buy & sell, offers**
+
+- **Events:** anyone can propose one; the admin approves it (admin events go
+  live at once) and every student and faculty member is told. Students register
+  with a seat limit and can cancel.
+- **Buy & sell:** students list books, cycles, gadgets and so on. Listings are
+  approved by the admin; buyers tap *I'm interested*, which tells the seller and
+  opens a WhatsApp chat. Three reports hide a listing.
+- **Offers & opportunities:** sponsored listings the admin adds (coding tests,
+  courses and training, internships, food near campus, coupons). Every student
+  sees the same list: nothing is targeted and only total taps are counted. They
+  are hidden for students under 18 or without a date of birth, and **Settings →
+  School campus** hides offers and buy & sell for everyone.
+
 **Getting a college started**
 
 - On a new server the app opens **Set up Outpass**: the college's name and
@@ -197,7 +244,7 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 **App structure (MVVM)**
 
 - Screens live in `apps/mobile/app/` (Expo Router). Each role has its own tab
-  group: `student`, `parent`, `warden`, `guard` and `admin`.
+  group: `student`, `parent`, `faculty`, `warden`, `guard` and `admin`.
 - Each screen gets its state and actions from a viewmodel hook in
   `src/features/*`.
 - Shared UI is in `src/ui` and `src/components`, and design tokens are in
@@ -403,8 +450,7 @@ answers are in [`docs/store-listing.md`](docs/store-listing.md).
 
 ## Follow-ups (not built)
 
-- Offline QR verification at the gate (Ed25519-signed tokens).
-- SMS alerts to parents (phone sign-in codes already go by SMS).
 - Multi-campus tenancy (one server per college today).
-- Helpdesk, dues and the other ideas in [`docs/mygate-learnings.md`](docs/mygate-learnings.md).
-- CI/CD.
+- Fee receipts as PDFs, and partial payments.
+- Paid placement or ranking for offers (today every offer is shown the same way).
+- Helpdesk and the other ideas in [`docs/mygate-learnings.md`](docs/mygate-learnings.md).

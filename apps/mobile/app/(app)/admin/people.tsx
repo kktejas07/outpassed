@@ -1,7 +1,9 @@
 import type { UserDto } from "@outpassed/shared";
 import { router } from "expo-router";
 import { useState } from "react";
-import { api, errorMessage } from "../../../src/api/client";
+import { api, campus, errorMessage } from "../../../src/api/client";
+import { useQuery } from "../../../src/lib/useQuery";
+import { QuickActions } from "../../../src/ui/QuickActions";
 import { useSession } from "../../../src/auth/session";
 import { pickPhoto } from "../../../src/features/photo/pickPhoto";
 import { useRibbon } from "../../../src/ui/Ribbon";
@@ -22,12 +24,14 @@ const roleFilters = [
   { value: "STUDENT", label: "Students" },
   { value: "PARENT", label: "Parents" },
   { value: "WARDEN", label: "Wardens" },
+  { value: "FACULTY", label: "Faculty" },
   { value: "GUARD", label: "Guards" },
   { value: "ADMIN", label: "Admins" },
 ] as const;
 
 function AddStaff({ onDone }: { onDone: () => void }) {
   const f = useAddStaff(onDone);
+  const depts = useQuery((t) => campus.departments(t)).data ?? [];
   return (
     <PopIn>
       <Card style={{ gap: 12, borderColor: color.accentLight }}>
@@ -36,11 +40,18 @@ function AddStaff({ onDone }: { onDone: () => void }) {
           options={[
             { value: "GUARD", label: "Guard" },
             { value: "WARDEN", label: "Warden" },
+            { value: "FACULTY", label: "Faculty" },
             { value: "ADMIN", label: "Admin" },
           ]}
           value={f.role}
           onChange={f.setRole}
         />
+        {f.role === "FACULTY" && depts.length ? (
+          <View style={{ gap: 6 }}>
+            <Text variant="label">Department</Text>
+            <Chips options={depts.map((d) => ({ value: d.id, label: d.name }))} value={f.departmentId} onChange={f.setDepartmentId} />
+          </View>
+        ) : null}
         <Field label="Name" value={f.name} onChangeText={f.setName} placeholder="Full name" />
         <Field label="Email" value={f.email} onChangeText={f.setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="name@college.edu" />
         <Field label="Temporary password" value={f.password} onChangeText={f.setPassword} secureTextEntry placeholder="At least 8 characters" />
@@ -98,11 +109,18 @@ export default function People() {
       onRefresh={vm.refresh}
       right={<Button compact tone={adding ? "outline" : "accent"} icon={adding ? "close" : "add"} label={adding ? "Close" : "Staff"} onPress={() => setAdding((a) => !a)} />}
     >
-      <View style={styles.tools}>
-        <Button compact tone="outline" icon="cloud-upload-outline" label="Import students" style={{ flex: 1 }} onPress={() => router.push("/import")} />
-        <Button compact tone="outline" icon="business-outline" label="Hostels" style={{ flex: 1 }} onPress={() => router.push("/hostels")} />
-      </View>
-      <Button compact tone="ghost" icon="list-outline" label="Activity log: who approved or changed what" style={{ alignSelf: "flex-start", paddingHorizontal: 0 }} onPress={() => router.push("/activity")} />
+      <QuickActions
+        actions={[
+          { key: "import", label: "Import students", icon: "cloud-upload-outline", onPress: () => router.push("/import") },
+          { key: "hostels", label: "Hostels", icon: "business-outline", onPress: () => router.push("/hostels") },
+          { key: "depts", label: "Departments", icon: "school-outline", onPress: () => router.push("/departments") },
+          { key: "fees", label: "Fees", icon: "wallet-outline", onPress: () => router.push("/fees-admin") },
+          { key: "review", label: "Review posts", icon: "shield-checkmark-outline", onPress: () => router.push("/review") },
+          { key: "offers", label: "Offers", icon: "gift-outline", onPress: () => router.push("/offers-admin") },
+          { key: "settings", label: "Settings", icon: "settings-outline", onPress: () => router.push("/settings") },
+          { key: "activity", label: "Activity log", icon: "list-outline", onPress: () => router.push("/activity") },
+        ]}
+      />
       {photoError ? <ErrorNote message={photoError} /> : null}
       {adding ? <AddStaff onDone={() => { setAdding(false); void vm.reload(); }} /> : null}
       <Chips options={roleFilters.map((r) => ({ value: r.value, label: r.label }))} value={vm.role} onChange={vm.setRole} />

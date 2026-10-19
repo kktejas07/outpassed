@@ -1,7 +1,8 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router/js-tabs";
 import type { BottomTabBarProps } from "expo-router/js-tabs";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, font, radius } from "../theme/tokens";
 import { Text } from "./Text";
@@ -31,14 +32,40 @@ function FloatingBar({ state, descriptors, emitter, navigateToTab, tabs }: Botto
               }}
               style={styles.item}
             >
-              <View style={[styles.pill, focused && styles.pillOn]}>
-                <Ionicons name={focused ? def.iconOn : def.icon} size={21} color={focused ? color.indigoDeep : color.faint} />
-                {focused ? <Text style={styles.label} numberOfLines={1}>{label}</Text> : null}
-              </View>
+              <TabPill focused={focused} icon={focused ? def.iconOn : def.icon} label={label} />
             </Pressable>
           );
         })}
       </View>
+    </View>
+  );
+}
+
+/** The pill grows in behind the active tab, and its icon gives a small hop. */
+function TabPill({ focused, icon, label }: { focused: boolean; icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  const v = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const hop = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: focused ? 1 : 0, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    if (focused) {
+      hop.setValue(0);
+      Animated.sequence([
+        Animated.timing(hop, { toValue: 1, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.spring(hop, { toValue: 0, friction: 4, tension: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [focused, v, hop]);
+  return (
+    <View style={styles.pill}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.pillOn, { opacity: v, transform: [{ scaleX: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]} />
+      <Animated.View style={{ transform: [{ translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }}>
+        <Ionicons name={icon} size={21} color={focused ? color.indigoDeep : color.faint} />
+      </Animated.View>
+      {focused ? (
+        <Animated.View style={{ opacity: v, transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }}>
+          <Text style={styles.label} numberOfLines={1}>{label}</Text>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -71,6 +98,6 @@ const styles = StyleSheet.create({
   },
   item: { flex: 1, alignItems: "center" },
   pill: { height: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  pillOn: { backgroundColor: color.indigoTint },
+  pillOn: { backgroundColor: color.indigoTint, borderRadius: radius.md },
   label: { fontFamily: font.bodyBold, fontSize: 12.5, color: color.indigoDeep },
 });

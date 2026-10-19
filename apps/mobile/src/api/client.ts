@@ -230,7 +230,7 @@ export const api = {
   dashboard: (token: string) => request<DashboardSummary>("/dashboard/summary", { token }),
   listUsers: (token: string, role?: Role) =>
     request<{ users: UserDto[] }>(`/admin/users${qs({ role })}`, { token }).then((r) => r.users),
-  createStaff: (token: string, input: { email: string; password: string; name: string; phone?: string; role: "WARDEN" | "GUARD" | "ADMIN" }) =>
+  createStaff: (token: string, input: { email: string; password: string; name: string; phone?: string; role: "WARDEN" | "GUARD" | "ADMIN" | "FACULTY"; departmentId?: string }) =>
     request<{ user: UserDto }>("/admin/users", { method: "POST", token, body: input }).then((r) => r.user),
   linkGuardian: (token: string, input: LinkGuardianInput) =>
     request<GuardianshipDto>("/admin/guardianships", { method: "POST", token, body: input }),
@@ -268,6 +268,113 @@ export type ReportSummary = {
 };
 export type ReportType = "movements" | "late" | "visitors" | "absences";
 export type AuditEntry = { id: string; actorName: string; actorRole: string; action: string; summary: string; targetType: string | null; targetId: string | null; createdAt: string };
+
+// --- Campus life: faculty, fees, events, marketplace, offers, settings ---
+
+export type FacultyOption = { id: string; name: string; department: string | null; isHod: boolean; mine: boolean };
+export type Department = { id: string; name: string; code: string | null; hod: { id: string; name: string } | null; faculty: number; students: number };
+export type FeePaymentDto = { id: string; method: "ONLINE" | "PROOF" | "OFFICE"; status: "PENDING" | "VERIFIED" | "REJECTED"; amountPaise: number; reference: string | null; note: string | null; createdAt: string; proofUrl: string | null };
+export type FeeDto = {
+  id: string;
+  category: "HOSTEL" | "MESS" | "BUS" | "TUITION" | "EXAM" | "FINE" | "OTHER";
+  title: string;
+  amountPaise: number;
+  dueDate: string;
+  status: "DUE" | "SUBMITTED" | "PAID" | "WAIVED";
+  overdue: boolean;
+  note: string | null;
+  paidAt: string | null;
+  student: { id: string; name: string; rollNo: string | null; hostel: string | null };
+  payments: FeePaymentDto[];
+};
+export type EventDto = {
+  id: string;
+  title: string;
+  description: string;
+  venue: string;
+  category: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number | null;
+  registered: boolean;
+  registrations: number;
+  seatsLeft: number | null;
+  registrationOpen: boolean;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  rejectReason: string | null;
+  organizer: { id: string; name: string };
+};
+export type MarketItemDto = {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  category: string;
+  condition: string;
+  status: "PENDING" | "ACTIVE" | "SOLD" | "REJECTED" | "REMOVED";
+  photoUrl: string | null;
+  seller: { id: string; name: string; hostel: string | null };
+  mine: boolean;
+  interested: boolean;
+  interests: number | null;
+  contactUrl: string | null;
+  createdAt: string;
+};
+export type OfferDto = { id: string; category: string; partnerName: string; title: string; body: string; url: string | null; couponCode: string | null; activeTo: string | null };
+export type CampusSettings = { offersEnabled: boolean; schoolMode: boolean; requireGatePhoto: boolean; institutionName: string };
+
+export const campus = {
+  settings: (token: string) => request<CampusSettings>("/settings", { token }),
+  updateSettings: (token: string, input: Partial<Omit<CampusSettings, "institutionName">>) => request<CampusSettings>("/admin/settings", { method: "PATCH", token, body: input }),
+
+  faculty: (token: string, q?: string) => request<{ faculty: FacultyOption[] }>(`/faculty${qs({ q })}`, { token }).then((r) => r.faculty),
+  departments: (token: string) => request<{ departments: Department[] }>("/departments", { token }).then((r) => r.departments),
+  createDepartment: (token: string, name: string, code?: string) => request<Department>("/admin/departments", { method: "POST", token, body: { name, code } }),
+  setHod: (token: string, id: string, hodId: string | null) => request<Department>(`/admin/departments/${id}`, { method: "PATCH", token, body: { hodId } }),
+
+  fees: (token: string) => request<{ fees: FeeDto[]; totals: { duePaise: number; overdue: number; open: number }; onlinePayment: boolean }>("/fees", { token }),
+  payOnline: (token: string, id: string) => request<{ url: string }>(`/fees/${id}/pay`, { method: "POST", token }),
+  checkPayment: (token: string, id: string) => request<FeeDto>(`/fees/${id}/check`, { method: "POST", token }),
+  uploadProof: (token: string, id: string, image: string, reference: string) => request<FeeDto>(`/fees/${id}/proof`, { method: "POST", token, body: { image, reference } }),
+  adminFees: (token: string, status?: string, q?: string) =>
+    request<{ fees: FeeDto[]; summary: { outstandingPaise: number; outstanding: number; collectedPaise: number; paid: number; proofsToReview: number } }>(`/admin/fees${qs({ status, q })}`, { token }),
+  assignFee: (token: string, input: { category: FeeDto["category"]; title: string; amountPaise: number; dueDate: string; note?: string; target: { hostelId?: string; departmentId?: string; allStudents?: boolean; studentIds?: string[] } }) =>
+    request<{ created: number }>("/admin/fees", { method: "POST", token, body: input }),
+  reviewProof: (token: string, paymentId: string, decision: "APPROVE" | "REJECT", note?: string) =>
+    request<FeeDto>(`/admin/fee-payments/${paymentId}/review`, { method: "POST", token, body: { decision, note } }),
+  markPaid: (token: string, id: string, reference?: string) => request<FeeDto>(`/admin/fees/${id}/mark-paid`, { method: "POST", token, body: { reference } }),
+
+  events: (token: string, scope: "upcoming" | "mine" | "pending" | "past" = "upcoming") => request<{ events: EventDto[] }>(`/events${qs({ scope })}`, { token }).then((r) => r.events),
+  event: (token: string, id: string) => request<EventDto>(`/events/${id}`, { token }),
+  createEvent: (token: string, input: { title: string; description: string; venue: string; category: string; startsAt: string; endsAt: string; capacity?: number }) =>
+    request<EventDto>("/events", { method: "POST", token, body: input }),
+  decideEvent: (token: string, id: string, decision: "APPROVE" | "REJECT", reason?: string) => request<EventDto>(`/admin/events/${id}/decision`, { method: "POST", token, body: { decision, reason } }),
+  register: (token: string, id: string) => request<EventDto>(`/events/${id}/register`, { method: "POST", token }),
+  unregister: (token: string, id: string) => request<EventDto>(`/events/${id}/register`, { method: "DELETE", token }),
+
+  market: (token: string, opts: { scope?: "browse" | "mine" | "pending"; category?: string; q?: string } = {}) =>
+    request<{ items: MarketItemDto[]; categories: string[] }>(`/market${qs(opts)}`, { token }),
+  marketItem: (token: string, id: string) => request<MarketItemDto>(`/market/${id}`, { token }),
+  sell: (token: string, input: { title: string; description: string; price: number; category: string; condition: string; photo?: string }) =>
+    request<MarketItemDto>("/market", { method: "POST", token, body: input }),
+  interested: (token: string, id: string) => request<MarketItemDto>(`/market/${id}/interest`, { method: "POST", token }),
+  sold: (token: string, id: string) => request<MarketItemDto>(`/market/${id}/sold`, { method: "POST", token }),
+  removeItem: (token: string, id: string) => request<void>(`/market/${id}`, { method: "DELETE", token }),
+  report: (token: string, id: string, reason: string) => request<{ ok: true }>(`/market/${id}/report`, { method: "POST", token, body: { reason } }),
+  decideItem: (token: string, id: string, decision: "APPROVE" | "REJECT", reason?: string) => request<MarketItemDto>(`/admin/market/${id}/decision`, { method: "POST", token, body: { decision, reason } }),
+
+  offers: (token: string) => request<{ offers: OfferDto[]; categories: string[] }>("/offers", { token }),
+  openOffer: (token: string, id: string) => request<{ url: string | null }>(`/offers/${id}/open`, { method: "POST", token }),
+  adminOffers: (token: string) => request<{ offers: (OfferDto & { active: boolean; clicks: number; sortOrder: number })[]; categories: string[] }>("/admin/offers", { token }),
+  createOffer: (token: string, input: { category: string; partnerName: string; title: string; body: string; url?: string; couponCode?: string; sortOrder?: number }) =>
+    request<OfferDto>("/admin/offers", { method: "POST", token, body: input }),
+  setOfferActive: (token: string, id: string, active: boolean) => request<OfferDto>(`/admin/offers/${id}`, { method: "PATCH", token, body: { active } }),
+
+  gatePhoto: (token: string, eventId: string, image: string) => request<{ photoUrl: string }>(`/gate/events/${eventId}/photo`, { method: "PUT", token, body: { image } }),
+};
+
+/** "₹45,000" */
+export const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 export const ops = {
   rollCall: (token: string, hostelId?: string) => request<RollSheet>(`/rollcall${qs({ hostelId })}`, { token }),

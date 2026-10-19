@@ -145,8 +145,10 @@ export function useWalkIn() {
   const { token } = useSession();
   const f = useVisitorFields();
   const [hostQuery, setHostQuery] = useState("");
-  const [hosts, setHosts] = useState<{ id: string; name: string; role: string }[]>([]);
-  const [host, setHost] = useState<{ id: string; name: string } | null>(null);
+  const [hosts, setHosts] = useState<{ id: string; name: string; role: string; detail: string | null }[]>([]);
+  const [host, setHost] = useState<{ id: string; name: string; detail?: string | null } | null>(null);
+  const [idNumber, setIdNumber] = useState("");
+  const [photo, setPhoto] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const ribbon = useRibbon();
@@ -166,6 +168,8 @@ export function useWalkIn() {
       visitorType: f.visitorType,
       purpose: f.purpose.trim(),
       hostId,
+      visitorIdNumber: idNumber.trim() || undefined,
+      photo: photo ?? undefined,
       durationMinutes: 180,
     }),
   );
@@ -181,6 +185,10 @@ export function useWalkIn() {
     hosts,
     host,
     setHost,
+    idNumber,
+    setIdNumber,
+    photo,
+    setPhoto,
     created,
     submit: async () => {
       setTouched(true);
@@ -188,7 +196,7 @@ export function useWalkIn() {
       const v = await action.run(host.id);
       if (v) {
         setCreated(`${v.visitorName} is waiting for ${host.name} to approve.`);
-        ribbon.show({ tone: "success", title: "Sent to host", body: `${host.name} will get an alert.` });
+        ribbon.show({ tone: "success", title: "Sent to host", body: `${host.name} will get an alert with the visitor's photo.` });
       }
     },
     reset: () => {
@@ -197,6 +205,8 @@ export function useWalkIn() {
       f.setPurpose("");
       setHost(null);
       setHostQuery("");
+      setIdNumber("");
+      setPhoto(null);
       setTouched(false);
       setCreated(null);
     },

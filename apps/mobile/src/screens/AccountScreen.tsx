@@ -15,7 +15,7 @@ import { Pill } from "../ui/Pill";
 import { Screen } from "../ui/Screen";
 import { Text } from "../ui/Text";
 
-const roleLabel = { STUDENT: "Student", PARENT: "Parent", WARDEN: "Warden", GUARD: "Security", ADMIN: "Admin" } as const;
+const roleLabel = { STUDENT: "Student", PARENT: "Parent", WARDEN: "Warden", GUARD: "Security", ADMIN: "Admin", FACULTY: "Faculty" } as const;
 
 export function AccountScreen() {
   const { user, token, signOut, refresh } = useSession();

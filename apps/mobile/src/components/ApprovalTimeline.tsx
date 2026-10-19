@@ -14,9 +14,29 @@ export function timelineSteps(o: OutpassDto): Step[] {
   const parent = o.approvals.find((a) => a.step === "PARENT");
   const warden = o.approvals.find((a) => a.step === "WARDEN");
   const rejectedBy = o.approvals.find((a) => a.decision === "REJECT");
-  const parentSkipped = !parent && o.status !== "PENDING_PARENT" && !(o.status === "CANCELLED" && !warden);
+  const parentSkipped = !parent && o.status !== "PENDING_PARENT" && o.status !== "PENDING_FACULTY" && !(o.status === "CANCELLED" && !warden);
 
   const steps: Step[] = [{ title: "Requested", detail: when(o.createdAt), state: "done" }];
+
+  // Faculty / HOD who gave permission, when the student named one.
+  const faculty = o.approvals.find((a) => a.step === "FACULTY");
+  if (faculty?.override) {
+    steps.push({
+      title: faculty.decision === "APPROVE" ? "Approved by warden (override)" : "Rejected by warden",
+      detail: `${faculty.approverName} · ${faculty.reason ?? ""}`.trim(),
+      state: faculty.decision === "APPROVE" ? "done" : "failed",
+    });
+    if (rejectedBy || o.status === "CANCELLED" || faculty.decision === "APPROVE") {
+      // An override covers every step.
+      return finish(steps, o, rejectedBy);
+    }
+  } else if (o.faculty || faculty) {
+    steps.push({
+      title: faculty ? (faculty.decision === "APPROVE" ? `${faculty.approverName} approved` : `${faculty.approverName} rejected`) : `${o.faculty?.name ?? "Faculty"}'s approval`,
+      detail: faculty ? `Faculty · ${when(faculty.createdAt)}` : o.status === "PENDING_FACULTY" ? "Waiting for them to approve" : "Faculty",
+      state: faculty ? (faculty.decision === "APPROVE" ? "done" : "failed") : o.status === "PENDING_FACULTY" ? "current" : "todo",
+    });
+  }
 
   if (parent?.override) {
     steps.push({
@@ -37,6 +57,11 @@ export function timelineSteps(o: OutpassDto): Step[] {
     });
   }
 
+  return finish(steps, o, rejectedBy);
+}
+
+/** Cancelled/rejected end, or the gate steps. */
+function finish(steps: Step[], o: OutpassDto, rejectedBy: OutpassDto["approvals"][number] | undefined): Step[] {
   if (rejectedBy || o.status === "CANCELLED") {
     if (o.status === "CANCELLED") steps.push({ title: "Cancelled", detail: "Cancelled by the student", state: "failed" });
     return steps;

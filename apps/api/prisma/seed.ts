@@ -15,7 +15,7 @@ import { phoneFields } from "../src/lib/phone";
 const PASSWORD = "outpass-demo-123";
 const hours = (n: number) => new Date(Date.now() + n * 3_600_000);
 
-async function upsertUser(email: string, name: string, role: "STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN", phone?: string) {
+async function upsertUser(email: string, name: string, role: "STUDENT" | "PARENT" | "WARDEN" | "GUARD" | "ADMIN" | "FACULTY", phone?: string) {
   const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
   return prisma.user.upsert({
     where: { email },
@@ -147,8 +147,81 @@ async function main() {
     },
   });
 
+  // --- Departments, HOD and faculty ---
+  const cse = await prisma.department.upsert({ where: { name: "Computer Science" }, create: { name: "Computer Science", code: "CSE" }, update: {} });
+  const ece = await prisma.department.upsert({ where: { name: "Electronics" }, create: { name: "Electronics", code: "ECE" }, update: {} });
+  await prisma.department.upsert({ where: { name: "Mechanical" }, create: { name: "Mechanical", code: "MECH" }, update: {} });
+  const hod = await upsertUser("faculty@outpass.dev", "Dr. Ramesh Kumar", "FACULTY", "+919800000020");
+  const anita = await upsertUser("anita@outpass.dev", "Prof. Anita Sharma", "FACULTY", "+919800000021");
+  const vikram = await upsertUser("vikram@outpass.dev", "Prof. Vikram Rao", "FACULTY");
+  await prisma.user.update({ where: { id: hod.id }, data: { departmentId: cse.id } });
+  await prisma.user.update({ where: { id: anita.id }, data: { departmentId: cse.id } });
+  await prisma.user.update({ where: { id: vikram.id }, data: { departmentId: ece.id } });
+  await prisma.department.update({ where: { id: cse.id }, data: { hodId: hod.id } });
+  await prisma.studentProfile.updateMany({ where: { rollNo: { contains: "CS" } }, data: { departmentId: cse.id } });
+  await prisma.studentProfile.updateMany({ where: { rollNo: { contains: "EC" } }, data: { departmentId: ece.id } });
+
+  // --- Fees ---
+  const day = (n: number) => new Date(new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10));
+  await prisma.fee.deleteMany({ where: { studentId: { in: ids } } });
+  await prisma.fee.createMany({
+    data: [
+      { studentId: asha, category: "HOSTEL", title: "Hostel fee · Semester 2", amountPaise: 4500000, dueDate: day(3), createdById: admin.id },
+      { studentId: asha, category: "BUS", title: "Bus pass · October", amountPaise: 180000, dueDate: day(-4), createdById: admin.id, remindStage: 3, lastRemindedAt: new Date() },
+      { studentId: asha, category: "MESS", title: "Mess fee · September", amountPaise: 350000, dueDate: day(-30), status: "PAID", paidAt: day(-32), createdById: admin.id },
+      { studentId: karthik, category: "HOSTEL", title: "Hostel fee · Semester 2", amountPaise: 4500000, dueDate: day(3), createdById: admin.id },
+      { studentId: priya, category: "FINE", title: "Late return fine", amountPaise: 20000, dueDate: day(7), note: "Returned 2 hours late on 12 Oct", createdById: admin.id },
+    ],
+  });
+
+  // --- Events ---
+  await prisma.campusEvent.deleteMany({});
+  const at = (days: number, hour: number) => {
+    const d = new Date(Date.now() + days * 86_400_000);
+    d.setUTCHours(hour - 5, 30, 0, 0); // campus time (IST)
+    return d;
+  };
+  const fest = await prisma.campusEvent.create({
+    data: { title: "Techfest 2026: Hackathon kick-off", description: "24-hour hackathon with mentors from industry. Teams of up to 4. Food, Wi-Fi and swag provided; prizes worth ₹1,00,000.", venue: "Main Auditorium", category: "Tech", startsAt: at(3, 10), endsAt: at(4, 10), capacity: 200, status: "APPROVED", createdById: admin.id, approvedById: admin.id },
+  });
+  await prisma.campusEvent.create({
+    data: { title: "Placement talk: cracking coding interviews", description: "Alumni from product companies share how they prepared, with a live mock interview.", venue: "Seminar Hall 2", category: "Placement", startsAt: at(1, 16), endsAt: at(1, 18), capacity: 120, status: "APPROVED", createdById: hod.id, approvedById: admin.id },
+  });
+  await prisma.campusEvent.create({
+    data: { title: "Cultural night: Dhamaka", description: "Music, dance and the inter-hostel band battle.", venue: "Open Air Theatre", category: "Cultural", startsAt: at(6, 18), endsAt: at(6, 22), status: "APPROVED", createdById: admin.id, approvedById: admin.id },
+  });
+  await prisma.campusEvent.create({
+    data: { title: "Robotics club demo day", description: "Line followers, drones and a robot arm. Everyone welcome.", venue: "Lab 3, Block B", category: "Club", startsAt: at(5, 15), endsAt: at(5, 17), capacity: 60, status: "PENDING", createdById: karthik },
+  });
+  const rahul = await prisma.user.findUnique({ where: { email: "rahul@outpass.dev" } });
+  for (const uid of [karthik, priya, ...(rahul ? [rahul.id] : [])]) await prisma.eventRegistration.create({ data: { eventId: fest.id, userId: uid } });
+
+  // --- Buy & sell ---
+  await prisma.marketItem.deleteMany({});
+  const sneha = await prisma.user.findUnique({ where: { email: "sneha@outpass.dev" } });
+  const items = [
+    { sellerId: karthik, title: "Engineering Mathematics (Kreyszig, 10th ed.)", description: "Barely used, no markings. Pick up from Block C.", price: 350, category: "Books", condition: "Like new", status: "ACTIVE" as const },
+    { sellerId: priya, title: "Hero Sprint cycle", description: "Good brakes, new tyres last month. Comes with a lock.", price: 2800, category: "Cycles", condition: "Used", status: "ACTIVE" as const },
+    { sellerId: sneha?.id ?? asha, title: "Study table lamp (LED)", description: "Three brightness levels, USB powered.", price: 400, category: "Electronics", condition: "Used", status: "ACTIVE" as const },
+    { sellerId: asha, title: "Scientific calculator fx-991", description: "Works perfectly. Allowed in exams.", price: 600, category: "Electronics", condition: "Like new", status: "ACTIVE" as const },
+    { sellerId: karthik, title: "Mattress (single)", description: "Moving out of the hostel.", price: 900, category: "Furniture", condition: "Used", status: "PENDING" as const },
+  ];
+  for (const it of items) await prisma.marketItem.create({ data: it });
+
+  // --- Offers & opportunities ---
+  await prisma.offer.deleteMany({});
+  await prisma.offer.createMany({
+    data: [
+      { category: "Coding & assessments", partnerName: "Code Spectra", title: "Free mock placement test", body: "A 60-minute coding and aptitude test with a detailed report. Good practice before campus drives.", url: "https://codespectra.ai", sortOrder: 10, createdById: admin.id },
+      { category: "Courses & training", partnerName: "Skyline Training Centre (near Gate 2)", title: "20% off full-stack weekend course", body: "8 weekends, project-based. Show your Outpass student ID at the desk.", couponCode: "OUTPASS20", sortOrder: 8, createdById: admin.id },
+      { category: "Internships & consulting", partnerName: "Araxis Systems", title: "Summer internships: apply by 30 Nov", body: "Paid internships in software engineering and data. Final-year and pre-final-year students.", url: "https://example.com/internships", sortOrder: 6, createdById: admin.id },
+      { category: "Food near campus", partnerName: "Quick delivery apps", title: "Late-night snacks and groceries", body: "Blinkit and Zepto deliver to the main gate. Collect from the security desk; the guard logs your parcel.", url: "https://blinkit.com", sortOrder: 4, createdById: admin.id },
+      { category: "Coupons", partnerName: "Campus stationery", title: "10% off lab records and drafters", body: "At the stationery shop in the admin block.", couponCode: "LAB10", sortOrder: 2, createdById: admin.id },
+    ],
+  });
+
   console.log(`Seeded demo accounts. Password for all: ${PASSWORD}`);
-  console.log("  student@outpass.dev  parent@outpass.dev  warden@outpass.dev  guard@outpass.dev  admin@outpass.dev");
+  console.log("  student@outpass.dev  parent@outpass.dev  warden@outpass.dev  guard@outpass.dev  admin@outpass.dev  faculty@outpass.dev (HOD)");
 }
 
 main()

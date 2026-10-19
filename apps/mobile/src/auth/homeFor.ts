@@ -7,6 +7,7 @@ export function homeFor(role: Role | undefined) {
     case "WARDEN": return "/warden" as const;
     case "GUARD": return "/guard" as const;
     case "ADMIN": return "/admin" as const;
+    case "FACULTY": return "/faculty" as const;
     default: return "/student" as const;
   }
 }

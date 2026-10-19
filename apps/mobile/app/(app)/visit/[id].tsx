@@ -1,13 +1,13 @@
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Platform, Share } from "react-native";
+import { Platform, Share, View } from "react-native";
 import { describeRepeat } from "@outpassed/shared/passToken";
 import { InvitePass } from "../../../src/components/InvitePass";
 import { useVisitDetail } from "../../../src/features/visits/useVisits";
 import { visitorTypes, visitStatus, when } from "../../../src/lib/format";
 import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
-import { ErrorNote, KeyValue, Loading } from "../../../src/ui/bits";
+import { Avatar, ErrorNote, KeyValue, Loading } from "../../../src/ui/bits";
 import { FadeIn, PopIn } from "../../../src/ui/motion";
 import { Pill } from "../../../src/ui/Pill";
 import { Screen } from "../../../src/ui/Screen";
@@ -52,6 +52,18 @@ export default function VisitDetail() {
       right={<Pill label={s.label} tone={s.tone} />}
       footer={vm.qr ? <Button icon={copied ? "checkmark" : "share-social-outline"} label={copied ? "Copied — paste it to the visitor" : "Share pass with visitor"} onPress={share} /> : undefined}
     >
+      {v.visitorPhotoUrl ? (
+        <FadeIn>
+          <Card style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <Avatar name={v.visitorName} size={84} tone="accent" photoUrl={v.visitorPhotoUrl} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="heading">{v.visitorName}</Text>
+              <Text variant="caption">Photo taken at the gate{v.visitorIdNumber ? ` · ID ${v.visitorIdNumber}` : ""}</Text>
+              <Text variant="caption">{v.visitorPhone}</Text>
+            </View>
+          </Card>
+        </FadeIn>
+      ) : null}
       {vm.qr ? (
         <PopIn>
           <InvitePass hostName={v.host.name} qrToken={vm.qr.token} code={v.code} validFrom={v.validFrom} validTo={v.validTo} repeat={v.repeat} />
@@ -68,6 +80,7 @@ export default function VisitDetail() {
         <Card style={{ paddingVertical: 6 }}>
           <KeyValue label="Meeting" value={v.host.name} />
           <KeyValue label="Phone" value={v.visitorPhone} />
+          {v.visitorIdNumber ? <KeyValue label="Roll no. / ID" value={v.visitorIdNumber} /> : null}
           <KeyValue label="Purpose" value={v.purpose} />
           <KeyValue label="Entry code" value={v.code} />
           {v.repeat ? <KeyValue label="Regular pass" value={describeRepeat(v.repeat)} /> : null}

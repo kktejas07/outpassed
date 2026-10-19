@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from "react-native";
 import { photoSrc } from "../api/client";
 import { color, font, radius } from "../theme/tokens";
-import { FadeIn } from "./motion";
+import { CountUp, FadeIn, ShimmerList } from "./motion";
 import { Text } from "./Text";
 
 export function Avatar({ name, size = 40, tone = "indigo", photoUrl }: { name: string; size?: number; tone?: "indigo" | "accent"; photoUrl?: string | null }) {
@@ -115,12 +115,9 @@ export function Empty({ icon, title, body }: { icon: keyof typeof Ionicons.glyph
   );
 }
 
-export function Loading() {
-  return (
-    <View style={{ paddingVertical: 48, alignItems: "center" }}>
-      <ActivityIndicator color={color.accent} />
-    </View>
-  );
+/** Placeholder cards that shimmer while a list loads. */
+export function Loading({ rows = 3 }: { rows?: number }) {
+  return <ShimmerList rows={rows} />;
 }
 
 export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () => void }) {
@@ -158,7 +155,11 @@ export function Stat({ label, value, tone = "ink", icon }: { label: string; valu
       <View style={[styles.statIcon, { backgroundColor: bg }]}>
         <Ionicons name={icon} size={16} color={fg} />
       </View>
-      <Text style={{ fontFamily: font.display, fontSize: 26, color: tone === "red" && value !== 0 ? color.red : color.ink }}>{value}</Text>
+      {typeof value === "number" ? (
+        <CountUp value={value} style={{ fontFamily: font.display, fontSize: 26, color: tone === "red" && value !== 0 ? color.red : color.ink }} />
+      ) : (
+        <Text style={{ fontFamily: font.display, fontSize: 26, color: color.ink }}>{value}</Text>
+      )}
       <Text variant="caption">{label}</Text>
     </View>
   );

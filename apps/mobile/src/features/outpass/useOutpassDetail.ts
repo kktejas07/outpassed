@@ -75,9 +75,10 @@ export function useOutpassDetail(id: string) {
   const canDecide =
     !!pass &&
     ((role === "PARENT" && pass.status === "PENDING_PARENT") ||
-      ((role === "WARDEN" || role === "ADMIN") && (pass.status === "PENDING_WARDEN" || pass.status === "PENDING_PARENT")));
-  const needsOverrideReason = (role === "WARDEN" || role === "ADMIN") && pass?.status === "PENDING_PARENT";
-  const canCancel = role === "STUDENT" && !!pass && ["PENDING_PARENT", "PENDING_WARDEN", "APPROVED"].includes(pass.status);
+      (role === "FACULTY" && pass.status === "PENDING_FACULTY" && pass.faculty?.id === user?.id) ||
+      ((role === "WARDEN" || role === "ADMIN") && ["PENDING_WARDEN", "PENDING_PARENT", "PENDING_FACULTY"].includes(pass.status)));
+  const needsOverrideReason = (role === "WARDEN" || role === "ADMIN") && (pass?.status === "PENDING_PARENT" || pass?.status === "PENDING_FACULTY");
+  const canCancel = role === "STUDENT" && !!pass && ["PENDING_FACULTY", "PENDING_PARENT", "PENDING_WARDEN", "APPROVED"].includes(pass.status);
   const extensionPending = pass?.extension?.status === "PENDING";
   const canAskExtension = role === "STUDENT" && !!pass && (pass.status === "OUT" || pass.status === "APPROVED") && !extensionPending;
   const canDecideExtension = (role === "WARDEN" || role === "ADMIN") && extensionPending;

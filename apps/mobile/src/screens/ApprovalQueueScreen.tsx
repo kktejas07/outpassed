@@ -67,7 +67,7 @@ export function ApprovalQueueScreen() {
               <OutpassCard outpass={o} showStudent />
             </FadeIn>
           ))}
-          {vm.withParent.length ? <SectionTitle title={`Still with parent · ${vm.withParent.length}`} /> : null}
+          {vm.withParent.length ? <SectionTitle title={`Still with faculty or parent · ${vm.withParent.length}`} /> : null}
           {vm.withParent.map((o, i) => (
             <FadeIn key={o.id} index={i + vm.readyForWarden.length}>
               <OutpassCard outpass={o} showStudent />
