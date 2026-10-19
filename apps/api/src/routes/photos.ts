@@ -1,3 +1,5 @@
+import { photosAllowed } from "../lib/consent";
+import { notifyLater } from "../lib/notify";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { idParamSchema, photoUploadSchema } from "@outpassed/shared";
@@ -35,11 +37,25 @@ async function savePhoto(userId: string, image: string) {
  * Profile photos, shown to guards at the gate so they can check the face
  * matches the pass. Uploads need sign-in; viewing uses a signed link.
  */
+/** Students under 18 (or on a school campus) need a guardian's agreement first; we ask the guardians. */
+async function requirePhotoConsent(userId: string) {
+  if (await photosAllowed(userId)) return;
+  const student = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, guardians: { select: { parentId: true } } } });
+  notifyLater(student.guardians.map((g) => g.parentId), {
+    kind: "CONSENT_NEEDED",
+    title: `Allow photos for ${student.name}?`,
+    body: "The college asks before keeping photos of students under 18. Open Outpass to agree or decline.",
+    data: { consentFor: userId },
+  });
+  throw new HttpError(409, "CONSENT_NEEDED", "A parent needs to agree before we keep photos of students under 18. We've asked them in the app.");
+}
+
 export async function photoRoutes(app: FastifyInstance): Promise<void> {
   const bodyLimit = 1024 * 1024;
 
   app.put("/me/photo", { onRequest: [app.authenticate], bodyLimit }, async (request: FastifyRequest) => {
     const { image } = photoUploadSchema.parse(request.body);
+    await requirePhotoConsent(request.user.sub);
     return savePhoto(request.user.sub, image);
   });
 
@@ -58,6 +74,7 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
     if (request.user.role === "WARDEN" && user.role !== "STUDENT") {
       throw new HttpError(403, "FORBIDDEN", "Wardens can only add student photos");
     }
+    await requirePhotoConsent(id);
     const saved = await savePhoto(id, image);
     await audit(request, "PHOTO_SET", `Set the profile photo for ${user.name}`, { type: "user", id });
     return saved;
@@ -84,8 +101,10 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
     requireRole(request, "GUARD", "ADMIN");
     const { id } = idParamSchema.parse(request.params);
     const { image } = photoUploadSchema.parse(request.body);
-    const event = await prisma.gateEvent.findUnique({ where: { id } });
+    const event = await prisma.gateEvent.findUnique({ where: { id }, include: { outpass: { select: { studentId: true } } } });
     if (!event) throw new HttpError(404, "NOT_FOUND", "Movement not found");
+    // Under 18 without a parent's agreement: the movement is logged, the photo is not kept.
+    if (event.outpass && !(await photosAllowed(event.outpass.studentId))) return { photoUrl: null, skipped: "NO_CONSENT" as const };
     const { data, mime } = decodePhoto(image);
     await prisma.gatePhoto.upsert({ where: { gateEventId: id }, create: { gateEventId: id, data, mime }, update: { data, mime } });
     return { photoUrl: gatePhotoUrl(id, true) };

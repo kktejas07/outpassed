@@ -55,7 +55,8 @@ Password for all: `outpass-demo-123`
 | Role | Email | Who |
 |---|---|---|
 | Student | student@outpass.dev | Asha Rao, CSE, Block C |
-| Parent | parent@outpass.dev | Lakshmi Rao, Asha's mother |
+| Student, under 18 | diya@outpass.dev | Diya Rao, Asha's sister (roll 26CS011): no photos until her mother agrees |
+| Parent | parent@outpass.dev | Lakshmi Rao, mother of Asha and Diya |
 | Faculty (HOD) | faculty@outpass.dev | Dr. Ramesh Kumar, head of CSE |
 | Faculty | anita@outpass.dev | Prof. Anita Sharma, CSE |
 | Warden | warden@outpass.dev | Mr. Suresh Nair |

@@ -348,7 +348,8 @@ export type BannerDto = {
   sponsor: string | null;
 };
 export type OccasionInput = { name: string; tagline: string; theme: string; icon: string; startsAt: string; endsAt: string };
-export type CampusSettings = { offersEnabled: boolean; schoolMode: boolean; requireGatePhoto: boolean; institutionName: string };
+export type CampusSettings = { offersEnabled: boolean; schoolMode: boolean; requireGatePhoto: boolean; photoRetentionDays: number; institutionName: string };
+export type ConsentRow = { student: { id: string; name: string }; state: "NOT_NEEDED" | "GIVEN" | "NEEDED"; givenAt: string | null; givenBy: string | null };
 
 export const campus = {
   settings: (token: string) => request<CampusSettings>("/settings", { token }),
@@ -406,7 +407,11 @@ export const campus = {
   createOccasion: (token: string, input: OccasionInput) => request<OccasionDto>("/admin/occasions", { method: "POST", token, body: input }),
   updateOccasion: (token: string, id: string, input: Partial<OccasionInput & { active: boolean }>) => request<OccasionDto>(`/admin/occasions/${id}`, { method: "PATCH", token, body: input }),
 
-  gatePhoto: (token: string, eventId: string, image: string) => request<{ photoUrl: string }>(`/gate/events/${eventId}/photo`, { method: "PUT", token, body: { image } }),
+  consent: (token: string) => request<{ version: string; retentionDays: number; children: ConsentRow[] }>("/consent", { token }),
+  giveConsent: (token: string, studentId: string) => request<{ ok: true }>(`/consent/${studentId}`, { method: "POST", token, body: { agree: true } }),
+  withdrawConsent: (token: string, studentId: string) => request<{ ok: true; removed: { profile: number; gate: number } }>(`/consent/${studentId}`, { method: "DELETE", token }),
+
+  gatePhoto: (token: string, eventId: string, image: string) => request<{ photoUrl: string | null; skipped?: "NO_CONSENT" }>(`/gate/events/${eventId}/photo`, { method: "PUT", token, body: { image } }),
 };
 
 /** "₹45,000" */

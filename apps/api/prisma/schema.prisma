@@ -128,6 +128,9 @@ model User {
   marketInterests MarketInterest[]
   offersCreated   Offer[]
   occasionsCreated Occasion[]
+  /// Students: a guardian's photo consent (needed under 18 or on a school campus).
+  photoConsent    PhotoConsent? @relation("ConsentStudent")
+  consentsGiven   PhotoConsent[] @relation("ConsentGuardian")
 
   @@index([role])
   @@index([phoneNormalized])
@@ -456,6 +459,8 @@ model Institution {
   schoolMode      Boolean @default(false)
   /// Guards must photograph each person at exit and entry.
   requireGatePhoto Boolean @default(true)
+  /// Gate and visitor photos older than this are deleted.
+  photoRetentionDays Int @default(90)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -606,6 +611,7 @@ model GatePhoto {
   mime        String
   createdAt   DateTime  @default(now())
 
+  @@index([createdAt])
   @@map("gate_photos")
 }
 
@@ -823,4 +829,19 @@ model Occasion {
 
   @@index([active, startsAt, endsAt])
   @@map("occasions")
+}
+
+/// A guardian agreed that the college may store photos of this student
+/// (profile photo and gate photos). Needed for students under 18 and for
+/// every student on a school campus. Withdrawing deletes the row and the photos.
+model PhotoConsent {
+  studentId  String   @id
+  student    User     @relation("ConsentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  guardianId String
+  guardian   User     @relation("ConsentGuardian", fields: [guardianId], references: [id], onDelete: Cascade)
+  /// Which wording they agreed to.
+  version    String
+  givenAt    DateTime @default(now())
+
+  @@map("photo_consents")
 }

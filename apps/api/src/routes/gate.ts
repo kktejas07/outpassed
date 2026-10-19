@@ -6,7 +6,7 @@ import { checkOutpassAtGate, checkVisitAtGate, FlowError } from "../domain/outpa
 import { verifyQrToken } from "../domain/qrToken";
 import { VISIT_QR_TTL_SECONDS } from "./visit";
 import { prisma } from "../lib/prisma";
-import { outpassInclude, toGateEventDto, type OutpassWithRelations } from "../lib/dto";
+import { outpassInclude, photoConsentOf, toGateEventDto, type OutpassWithRelations } from "../lib/dto";
 import { guardianIds, notifyLater } from "../lib/notify";
 import { academicContacts } from "../lib/academic";
 import { clock } from "../lib/time";
@@ -36,7 +36,12 @@ function outpassVerdict(row: OutpassWithRelations, now: Date): GateVerdict {
     returnBy: row.returnBy,
     now,
   });
-  const person = { name: row.student.name, detail: studentDetail(row.student.student), photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt) };
+  const person = {
+    name: row.student.name,
+    detail: studentDetail(row.student.student),
+    photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt),
+    photoAllowed: photoConsentOf(row.student) !== "NEEDED",
+  };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "OUTPASS", subjectId: row.id, person };
   }
@@ -69,6 +74,7 @@ function visitVerdict(visit: Visit & { host: { name: string } }, now: Date): Gat
     name: visit.visitorName,
     detail: `Visiting ${visit.host.name} · ${visit.purpose}${visit.visitorIdNumber ? ` · ID ${visit.visitorIdNumber}` : ""}`,
     photoUrl: visitorPhotoUrl(visit.id, !!visit.visitorPhotoMime),
+    photoAllowed: true,
   };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "VISIT", subjectId: visit.id, person };

@@ -5,6 +5,7 @@ import { color } from "../theme/tokens";
 import { Card } from "../ui/Card";
 import { Text } from "../ui/Text";
 import { SosBanner } from "../components/SosBanner";
+import { ConsentCard } from "../components/ConsentCard";
 import { OutpassCard } from "../components/OutpassCard";
 import { useApprovalQueue } from "../features/approvals/useApprovalQueue";
 import { useSession } from "../auth/session";
@@ -30,6 +31,7 @@ export function ApprovalQueueScreen() {
       onRefresh={vm.refresh}
       bell
     >
+      {user?.role === "PARENT" ? <ConsentCard /> : null}
       {vm.isWarden ? <SosBanner /> : (
         <Card onPress={() => router.push("/notices")} style={styles.link}>
           <Ionicons name="megaphone-outline" size={20} color={color.indigo} />

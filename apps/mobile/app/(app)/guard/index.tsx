@@ -43,6 +43,8 @@ export default function GuardScan() {
 
   const verdict = s.phase === "verdict" || s.phase === "saving" || s.phase === "done" ? s.verdict : null;
   const allowed = verdict?.allowed;
+  // Under 18 without a parent's agreement: no photo is taken or kept.
+  const noPhoto = verdict?.kind === "OUTPASS" && verdict.person?.photoAllowed === false;
 
   return (
     <Screen
@@ -191,13 +193,20 @@ export default function GuardScan() {
           {(s.phase === "verdict" || s.phase === "saving") && allowed ? (
             <>
               <View style={{ alignSelf: "stretch" }}>
-                <PhotoCapture
-                  value={photo}
-                  onChange={setPhoto}
-                  label={verdict.direction === "ENTRY" ? "Photo at entry" : "Photo at exit"}
-                  hint={desk.photoRequired ? "Required by your college for every exit and entry." : "Kept with this gate record."}
-                />
-                {desk.photoRequired && !photo ? (
+                {noPhoto ? (
+                  <View style={styles.consentNote}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={color.indigo} />
+                    <Text variant="caption" style={{ flex: 1, color: color.ink }}>No photo for this student: under 18 and their parent hasn't agreed. Check their college ID.</Text>
+                  </View>
+                ) : (
+                  <PhotoCapture
+                    value={photo}
+                    onChange={setPhoto}
+                    label={verdict.direction === "ENTRY" ? "Photo at entry" : "Photo at exit"}
+                    hint={desk.photoRequired ? "Required by your college for every exit and entry." : "Kept with this gate record."}
+                  />
+                )}
+                {desk.photoRequired && !photo && !noPhoto ? (
                   <Button compact tone="ghost" label={skipPhoto ? "Photo skipped (noted in the log)" : "Camera not working? Skip photo"} style={{ alignSelf: "flex-start", paddingHorizontal: 0 }} onPress={() => setSkipPhoto((v) => !v)} />
                 ) : null}
               </View>
@@ -206,7 +215,7 @@ export default function GuardScan() {
               </Text>
               <View style={styles.row}>
                 <Button style={{ flex: 1 }} tone="danger" label="No match" onPress={() => void desk.confirm(false, mode === "manual" ? "MANUAL" : "QR", photo)} disabled={s.phase === "saving"} />
-                <Button style={{ flex: 1.4 }} tone="success" icon="checkmark" label={verdict.direction === "ENTRY" ? "Let in" : "Let out"} loading={s.phase === "saving"} disabled={desk.photoRequired && !photo && !skipPhoto} onPress={() => void desk.confirm(true, mode === "manual" ? "MANUAL" : "QR", photo)} />
+                <Button style={{ flex: 1.4 }} tone="success" icon="checkmark" label={verdict.direction === "ENTRY" ? "Let in" : "Let out"} loading={s.phase === "saving"} disabled={desk.photoRequired && !noPhoto && !photo && !skipPhoto} onPress={() => void desk.confirm(true, mode === "manual" ? "MANUAL" : "QR", noPhoto ? null : photo)} />
               </View>
             </>
           ) : (
@@ -222,6 +231,7 @@ export default function GuardScan() {
 }
 
 const styles = StyleSheet.create({
+  consentNote: { flexDirection: "row", gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: color.indigoTint },
   viewfinder: { height: 300, borderRadius: radius.lg, overflow: "hidden", backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
   noCam: { alignItems: "center", gap: 12, padding: 24 },
   corners: { position: "absolute", width: 240, height: 240 },

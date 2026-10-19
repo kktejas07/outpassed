@@ -11,6 +11,7 @@ import { gatePhotoUrl, photoUrl, visitorPhotoUrl } from "./photo";
 import { cachedSettings } from "./settings";
 import { ADULT_AGE, ageOn } from "../domain/outpassFlow";
 import { passUrl } from "./visitCode";
+import { consentState } from "./consent";
 
 /**
  * Prisma rows -> API DTOs. Dates are serialised to ISO strings so responses
@@ -25,6 +26,7 @@ export const userInclude = {
   photo: { select: { updatedAt: true } },
   department: true,
   headOf: { select: { id: true } },
+  photoConsent: { select: { studentId: true } },
 } satisfies Prisma.UserInclude;
 
 type UserRow = User & {
@@ -32,7 +34,13 @@ type UserRow = User & {
   photo?: Pick<UserPhoto, "updatedAt"> | null;
   department?: Department | null;
   headOf?: { id: string }[];
+  photoConsent?: { studentId: string } | null;
 };
+
+/** Students: may photos be stored? (Needs `photoConsent` in the include to report GIVEN.) */
+export function photoConsentOf(user: UserRow) {
+  return user.role === "STUDENT" ? consentState(user.student?.dateOfBirth, !!user.photoConsent) : "NOT_NEEDED";
+}
 
 /**
  * Sponsored offers go to adult students only, and never on school campuses.
@@ -68,12 +76,13 @@ export function toUserDto(user: UserRow): UserDto {
     photoUrl: photoUrl(user.id, user.photo?.updatedAt),
     department: dept ? { id: dept.id, name: dept.name, isHod: !!user.headOf?.some((d) => d.id === dept.id) } : null,
     showOffers: showsOffers(user),
+    photoConsent: photoConsentOf(user),
   };
 }
 
 /** The include every outpass query uses, so the DTO always has what it needs. */
 export const outpassInclude = {
-  student: { include: { student: { include: { department: true } }, photo: { select: { updatedAt: true } } } },
+  student: { include: { student: { include: { department: true } }, photo: { select: { updatedAt: true } }, photoConsent: { select: { studentId: true } } } },
   faculty: { select: { id: true, name: true } },
   approvals: { include: { approver: true }, orderBy: { createdAt: "asc" } },
   extensions: { include: { decidedBy: true }, orderBy: { createdAt: "desc" }, take: 1 },

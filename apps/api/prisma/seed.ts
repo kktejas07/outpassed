@@ -61,6 +61,24 @@ async function main() {
     update: {},
   });
 
+  // Asha's younger sister, a first-year under 18: no photos until her mother agrees.
+  const diyaUser = await upsertUser("diya@outpass.dev", "Diya Rao", "STUDENT", "+919800000013");
+  const diyaDob = new Date();
+  diyaDob.setFullYear(diyaDob.getFullYear() - 17, 1, 10);
+  await prisma.studentProfile.upsert({
+    where: { userId: diyaUser.id },
+    create: { userId: diyaUser.id, rollNo: "26CS011", hostel: blockC.name, hostelId: blockC.id, room: "220", dateOfBirth: diyaDob },
+    update: { rollNo: "26CS011", hostel: blockC.name, hostelId: blockC.id, room: "220", dateOfBirth: diyaDob },
+  });
+  await prisma.guardianship.upsert({
+    where: { studentId_parentId: { studentId: diyaUser.id, parentId: parent.id } },
+    create: { studentId: diyaUser.id, parentId: parent.id, relation: "Mother", priority: 1 },
+    update: {},
+  });
+  await prisma.photoConsent.deleteMany({ where: { studentId: diyaUser.id } });
+  await prisma.userPhoto.deleteMany({ where: { userId: diyaUser.id } });
+  ids.push(diyaUser.id);
+
   // Reset demo activity so the screens always show a fresh picture.
   await prisma.outpass.deleteMany({ where: { studentId: { in: ids } } });
   await prisma.notification.deleteMany({});
@@ -90,6 +108,20 @@ async function main() {
       reason: "Dental appointment",
       leaveAt: hours(0),
       returnBy: hours(4),
+      status: "APPROVED",
+      approvals: { create: { step: "WARDEN", decision: "APPROVE", approverId: warden.id } },
+    },
+  });
+
+  // Diya is cleared for an evening outing: the guard sees "no photo, parent hasn't agreed".
+  await prisma.outpass.create({
+    data: {
+      studentId: diyaUser.id,
+      type: "LOCAL",
+      destination: "Stationery shop, Gate 2",
+      reason: "Lab record and drafter",
+      leaveAt: hours(-0.25),
+      returnBy: hours(2),
       status: "APPROVED",
       approvals: { create: { step: "WARDEN", decision: "APPROVE", approverId: warden.id } },
     },

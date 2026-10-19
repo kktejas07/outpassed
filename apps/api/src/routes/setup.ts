@@ -10,6 +10,7 @@ import { HttpError } from "../plugins/errorHandler";
 import { requireRole } from "../plugins/auth";
 import { audit } from "../lib/audit";
 import { campusSettings, forgetSettings } from "../lib/settings";
+import { purgeOldPhotos } from "../lib/photoRetention";
 import { z } from "zod";
 
 const tokenRequired = () => env.NODE_ENV === "production" || Boolean(env.SETUP_TOKEN);
@@ -29,6 +30,7 @@ function tokenOk(given: string | undefined): boolean {
 /** The seeded demo logins, in the order a tester usually tries them. */
 const DEMO = [
   { email: "student@outpass.dev", label: "Student" },
+  { email: "diya@outpass.dev", label: "Student, under 18" },
   { email: "parent@outpass.dev", label: "Parent" },
   { email: "faculty@outpass.dev", label: "Faculty (HOD)" },
   { email: "anita@outpass.dev", label: "Faculty" },
@@ -102,7 +104,7 @@ export async function setupRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/admin/settings", { onRequest: [app.authenticate] }, async (request) => {
     requireRole(request, "ADMIN");
     const body = z
-      .object({ offersEnabled: z.boolean().optional(), schoolMode: z.boolean().optional(), requireGatePhoto: z.boolean().optional(), name: z.string().trim().min(2).max(120).optional(), address: z.string().trim().max(300).optional() })
+      .object({ offersEnabled: z.boolean().optional(), schoolMode: z.boolean().optional(), requireGatePhoto: z.boolean().optional(), photoRetentionDays: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).optional(), name: z.string().trim().min(2).max(120).optional(), address: z.string().trim().max(300).optional() })
       .parse(request.body);
     const current = await prisma.institution.findUnique({ where: { id: 1 } });
     await prisma.institution.upsert({
@@ -111,6 +113,8 @@ export async function setupRoutes(app: FastifyInstance): Promise<void> {
       update: body,
     });
     forgetSettings();
+    // A shorter retention period applies straight away.
+    if (body.photoRetentionDays && current && body.photoRetentionDays < current.photoRetentionDays) await purgeOldPhotos();
     await audit(request, "SETTINGS_CHANGED", `Changed college settings: ${Object.entries(body).map(([k, v]) => `${k} → ${v}`).join(", ")}`, undefined, { before: current, after: body });
     const [settings, campus] = await Promise.all([campusSettings(), campusInfo()]);
     return { ...settings, institutionName: campus.name };

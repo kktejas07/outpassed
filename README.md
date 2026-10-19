@@ -212,6 +212,17 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
   and a photo is taken. The guard picks the student **or faculty member** they
   are visiting, and that person gets the alert with the photo.
 
+**Photo consent and retention**
+
+- Students under 18 (and every student when **School campus** is on) are not
+  photographed until a linked parent agrees in their app. Until then uploads are
+  refused, the guard is told to check the college ID, and gate photos sent
+  anyway are not kept. Withdrawing deletes the profile photo and every gate
+  photo. Agreeing and withdrawing are in the activity log.
+- **Settings → Keep gate photos for** (30 days, 90 days (default), 6 months,
+  1 year): exit, entry and visitor photos older than that are deleted every
+  6 hours; the movement log stays.
+
 **Fees**
 
 - The office assigns a fee (hostel, mess, bus, tuition, exam, fine, other) to

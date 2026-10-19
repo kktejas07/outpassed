@@ -67,6 +67,11 @@ export const userSchema = z.object({
   department: z.object({ id: uuidSchema, name: z.string(), isHod: z.boolean() }).nullable().default(null),
   /** Shown "Offers & opportunities" (adults on a college campus with offers on). */
   showOffers: z.boolean().default(false),
+  /**
+   * Students: whether photos may be stored. NEEDED means under 18 (or a school
+   * campus) and no guardian has agreed yet; no photos are kept until they do.
+   */
+  photoConsent: z.enum(["NOT_NEEDED", "GIVEN", "NEEDED"]).default("NOT_NEEDED"),
 });
 
 export const authResponseSchema = z.object({
@@ -292,6 +297,8 @@ export const gateVerdictSchema = z.object({
       detail: z.string(),
       /** Photo to compare at the gate; null when none is on file. */
       photoUrl: z.string().nullable().default(null),
+      /** False for a student under 18 whose parent hasn't agreed to photos: don't take one. */
+      photoAllowed: z.boolean().default(true),
     })
     .nullable(),
 });
