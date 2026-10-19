@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { PublicVisitPass } from "@outpassed/shared";
 import { env } from "../env";
-import { issueQrToken } from "../domain/qrToken";
+import { visitToken, repeatOf } from "../lib/passes";
+import { VISIT_QR_TTL_SECONDS } from "./visit";
 import { prisma } from "../lib/prisma";
 import { HttpError } from "../plugins/errorHandler";
 import { campusInfo } from "./setup";
@@ -25,7 +26,8 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
       validFrom: visit.validFrom.toISOString(),
       validTo: visit.validTo.toISOString(),
       code: usable ? visit.code : "",
-      qrToken: usable && visit.validTo > new Date() ? issueQrToken(visit.id, "VISIT", env.QR_SECRET) : null,
+      qrToken: usable && visit.validTo > new Date() ? visitToken(visit, VISIT_QR_TTL_SECONDS) : null,
+      repeat: repeatOf(visit),
       campus: await campusInfo(),
     };
     reply.header("cache-control", "no-store");

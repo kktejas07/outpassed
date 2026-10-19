@@ -1,4 +1,5 @@
 import { StyleSheet, View } from "react-native";
+import { describeRepeat } from "@outpassed/shared/passToken";
 import { when } from "../lib/format";
 import { color, font, radius, shadow } from "../theme/tokens";
 import { QrCode } from "../ui/QrCode";
@@ -15,6 +16,7 @@ export function InvitePass({
   code,
   validFrom,
   validTo,
+  repeat,
   campusName,
   campusAddress,
 }: {
@@ -24,6 +26,8 @@ export function InvitePass({
   code: string;
   validFrom: string;
   validTo: string;
+  /** Regular pass: these weekdays and hours until validTo. */
+  repeat?: { days: number[]; from: string; to: string } | null;
   campusName?: string;
   campusAddress?: string;
 }) {
@@ -50,7 +54,14 @@ export function InvitePass({
             <Text style={styles.codeText}>{code}</Text>
           </View>
         ) : null}
-        <Text variant="label" style={{ textAlign: "center" }}>{when(validFrom)} – {when(validTo)}</Text>
+        {repeat ? (
+          <>
+            <Text variant="label" style={{ textAlign: "center" }}>{describeRepeat(repeat)}</Text>
+            <Text variant="caption" style={{ textAlign: "center" }}>Regular pass · until {when(validTo)}</Text>
+          </>
+        ) : (
+          <Text variant="label" style={{ textAlign: "center" }}>{when(validFrom)} – {when(validTo)}</Text>
+        )}
         {campusName ? (
           <View style={{ alignItems: "center", gap: 2 }}>
             <Text variant="heading" style={{ textAlign: "center" }}>{campusName}</Text>

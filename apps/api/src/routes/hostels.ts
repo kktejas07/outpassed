@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
+import { audit } from "../lib/audit";
 
 const hostelInclude = {
   wardens: { include: { user: { select: { id: true, name: true } } } },
@@ -36,6 +37,7 @@ export async function hostelRoutes(app: FastifyInstance): Promise<void> {
     const clash = await prisma.hostel.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
     if (clash) throw new HttpError(409, "HOSTEL_EXISTS", "A hostel with this name already exists");
     const row = await prisma.hostel.create({ data: { name } });
+    await audit(request, "HOSTEL_CREATED", `Added hostel ${name}`, { type: "hostel", id: row.id });
     return reply.status(201).send(await hostelDto(row.id));
   });
 
@@ -52,6 +54,7 @@ export async function hostelRoutes(app: FastifyInstance): Promise<void> {
       prisma.hostel.update({ where: { id }, data: { name } }),
       prisma.studentProfile.updateMany({ where: { hostelId: id }, data: { hostel: name } }),
     ]);
+    await audit(request, "HOSTEL_RENAMED", `Renamed hostel ${found.name} to ${name}`, { type: "hostel", id });
     return hostelDto(id);
   });
 
@@ -66,13 +69,15 @@ export async function hostelRoutes(app: FastifyInstance): Promise<void> {
     if (!hostel) throw new HttpError(404, "NOT_FOUND", "Hostel not found");
     if (!warden || warden.role !== "WARDEN") throw new HttpError(404, "WARDEN_NOT_FOUND", "Warden not found");
     await prisma.wardenHostel.upsert({ where: { userId_hostelId: { userId, hostelId: id } }, create: { userId, hostelId: id }, update: {} });
+    await audit(request, "WARDEN_ASSIGNED", `Assigned ${warden.name} to ${hostel.name}`, { type: "hostel", id });
     return hostelDto(id);
   });
 
   app.delete("/admin/hostels/:id/wardens/:userId", { onRequest: [app.authenticate] }, async (request) => {
     requireRole(request, "ADMIN");
     const { id, userId } = z.object({ id: z.uuid(), userId: z.uuid() }).parse(request.params);
-    await prisma.wardenHostel.deleteMany({ where: { hostelId: id, userId } });
+    const removed = await prisma.wardenHostel.deleteMany({ where: { hostelId: id, userId } });
+    if (removed.count) await audit(request, "WARDEN_UNASSIGNED", `Removed a warden from a hostel`, { type: "hostel", id }, { userId });
     return hostelDto(id);
   });
 }

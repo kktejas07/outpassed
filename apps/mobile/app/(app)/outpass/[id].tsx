@@ -70,7 +70,7 @@ export default function OutpassDetail() {
     >
       {vm.showQr ? (
         <PopIn>
-          <GatePass outpass={p} token={vm.qr?.token ?? null} lifetime={vm.qr?.lifetime ?? 30} error={vm.qrError} />
+          <GatePass outpass={p} token={vm.qr?.token ?? null} lifetime={vm.qr?.lifetime ?? 30} error={vm.qrError} offline={vm.qr?.offline} />
         </PopIn>
       ) : null}
 

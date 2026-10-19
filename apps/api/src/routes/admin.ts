@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createStaffSchema, importSchema, linkGuardianSchema, roleSchema, type GuardianshipDto } from "@outpassed/shared";
 import { importStudents } from "../lib/importStudents";
 import { phoneFields } from "../lib/phone";
+import { audit } from "../lib/audit";
 import { prisma } from "../lib/prisma";
 import { toUserDto } from "../lib/dto";
 import { requireRole } from "../plugins/auth";
@@ -30,6 +31,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       },
       include: { student: true },
     });
+    await audit(request, "STAFF_CREATED", `Created ${body.role.toLowerCase()} account for ${user.name}`, { type: "user", id: user.id });
     return reply.status(201).send({ user: toUserDto(user) });
   });
 
@@ -62,6 +64,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       create: { studentId: student.id, parentId: parent.id, relation: body.relation, priority: body.priority },
       update: { relation: body.relation, priority: body.priority },
     });
+    await audit(request, "GUARDIAN_LINKED", `Linked ${parent.name} (${body.relation}) to ${student.name}`, { type: "user", id: student.id });
     const dto: GuardianshipDto = {
       id: row.id,
       studentId: row.studentId,
@@ -76,11 +79,49 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.post("/admin/import/students", { bodyLimit: 3 * 1024 * 1024 }, async (request) => {
     const body = importSchema.parse(request.body);
     try {
-      return await importStudents(body.csv, { dryRun: body.dryRun, sendWelcome: body.sendWelcome });
+      const result = await importStudents(body.csv, { dryRun: body.dryRun, sendWelcome: body.sendWelcome });
+      if (!body.dryRun) {
+        const s = result.summary;
+        await audit(request, "STUDENTS_IMPORTED", `Imported students: ${s.created} added, ${s.updated} updated, ${s.parentsCreated} parents added, ${s.errors} rows skipped`, undefined, s);
+      }
+      return result;
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === "MISSING_COLUMNS" || code === "TOO_MANY_ROWS") throw new HttpError(400, code, (err as Error).message);
       throw err;
     }
+  });
+
+  /** Who did what, newest first. */
+  app.get("/admin/audit", async (request) => {
+    const q = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        before: z.iso.datetime().optional(),
+        targetType: z.string().max(40).optional(),
+        targetId: z.string().max(80).optional(),
+      })
+      .parse(request.query);
+    const rows = await prisma.auditLog.findMany({
+      where: {
+        ...(q.before ? { createdAt: { lt: new Date(q.before) } } : {}),
+        ...(q.targetType ? { targetType: q.targetType } : {}),
+        ...(q.targetId ? { targetId: q.targetId } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: q.limit,
+    });
+    return {
+      entries: rows.map((r) => ({
+        id: r.id,
+        actorName: r.actorName,
+        actorRole: r.actorRole,
+        action: r.action,
+        summary: r.summary,
+        targetType: r.targetType,
+        targetId: r.targetId,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    };
   });
 }

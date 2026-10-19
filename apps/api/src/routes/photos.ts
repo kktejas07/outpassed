@@ -5,6 +5,7 @@ import { photoUrl, verifyPhotoSig } from "../lib/photo";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
+import { audit } from "../lib/audit";
 
 const MAX_BYTES = 500 * 1024;
 
@@ -58,7 +59,9 @@ export async function photoRoutes(app: FastifyInstance): Promise<void> {
     if (request.user.role === "WARDEN" && user.role !== "STUDENT") {
       throw new HttpError(403, "FORBIDDEN", "Wardens can only add student photos");
     }
-    return savePhoto(id, image);
+    const saved = await savePhoto(id, image);
+    await audit(request, "PHOTO_SET", `Set the profile photo for ${user.name}`, { type: "user", id });
+    return saved;
   });
 
   app.get("/photos/:userId", async (request, reply) => {

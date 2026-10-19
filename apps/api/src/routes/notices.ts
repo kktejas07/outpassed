@@ -2,6 +2,7 @@ import type { NoticeAudience, Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createNoticeSchema, idParamSchema, type NoticeDto } from "@outpassed/shared";
 import { notifyLater } from "../lib/notify";
+import { audit } from "../lib/audit";
 import { hostelsOfViewer, wardenScope } from "../lib/hostels";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
@@ -97,6 +98,7 @@ export async function noticeRoutes(app: FastifyInstance): Promise<void> {
       body: row.body.length > 140 ? `${row.body.slice(0, 137)}…` : row.body,
       data: { noticeId: row.id },
     });
+    await audit(request, "NOTICE_POSTED", `Posted notice "${row.title}" to ${recipients.length} people`, { type: "notice", id: row.id });
     return reply.status(201).send({ id: row.id });
   });
 
@@ -123,6 +125,7 @@ export async function noticeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "FORBIDDEN", "Only the author or an admin can remove this notice");
     }
     await prisma.notice.delete({ where: { id } });
+    await audit(request, "NOTICE_REMOVED", `Removed notice "${row.title}"`, { type: "notice", id });
     return reply.status(204).send();
   });
 }

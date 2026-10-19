@@ -44,7 +44,12 @@ says how to tell it worked.
    **People → Hostels** tick which hostels each warden covers; in
    **People → Import students** load the class list CSV (preview first).
    Students sign in with a texted code, or set a password with "Forgot password".
-7. **Photos**: ask students to add a photo on the **Me** tab before the pilot
+7. **Backups**: turn on Dokploy's scheduled PostgreSQL backups (to S3), or
+   run `scripts/backup-db.sh` from cron. Restore one into a scratch database
+   to check it works.
+8. **Guards' phones**: sign in once on Wi-Fi so the phone downloads the pass
+   key; after that, scanning works even when the gate has no signal.
+9. **Photos**: ask students to add a photo on the **Me** tab before the pilot
    starts (or upload them from the college ID database in **People**).
 
 ## 2. Connect push notifications

@@ -8,6 +8,7 @@ import type {
   GateEventInput,
   GateEventList,
   GateVerdict,
+  GateKey,
   GuardianshipDto,
   HostelDto,
   HostList,
@@ -202,6 +203,7 @@ export const api = {
   deleteNotice: (token: string, id: string) => request<void>(`/notices/${id}`, { method: "DELETE", token }),
 
   // Gate
+  gateKey: (token: string) => request<GateKey>("/gate/key", { token }),
   scan: (token: string, qrToken: string) =>
     request<GateVerdict>("/gate/scan", { method: "POST", token, body: { token: qrToken } }),
   lookupRoll: (token: string, rollNo: string) => request<GateVerdict>(`/gate/lookup${qs({ rollNo })}`, { token }),
@@ -232,6 +234,51 @@ export const api = {
     request<{ user: UserDto }>("/admin/users", { method: "POST", token, body: input }).then((r) => r.user),
   linkGuardian: (token: string, input: LinkGuardianInput) =>
     request<GuardianshipDto>("/admin/guardianships", { method: "POST", token, body: input }),
+};
+
+export type RollMark = "PRESENT" | "ABSENT" | "ON_PASS";
+export type RollSheet = {
+  hostel: { id: string; name: string };
+  hostels: { id: string; name: string }[];
+  date: string;
+  rollCall: { id: string; startedAt: string; closedAt: string | null; takenByName: string } | null;
+  students: {
+    id: string;
+    name: string;
+    rollNo: string | null;
+    room: string | null;
+    photoUrl: string | null;
+    status: RollMark | null;
+    pass: { outpassId: string; destination: string; returnBy: string; overdue: boolean } | null;
+  }[];
+  counts: { total: number; present: number; absent: number; onPass: number; unmarked: number };
+};
+export type ReportSummary = {
+  from: string;
+  to: string;
+  outpasses: { requested: number; approved: number; rejected: number };
+  movements: { exits: number; returns: number };
+  lateReturns: number;
+  overdueNow: number;
+  visitors: number;
+  parcels: number;
+  sos: number;
+  rollCallAbsences: number;
+  repeatLate: { id: string; name: string; rollNo: string | null; count: number }[];
+};
+export type ReportType = "movements" | "late" | "visitors" | "absences";
+export type AuditEntry = { id: string; actorName: string; actorRole: string; action: string; summary: string; targetType: string | null; targetId: string | null; createdAt: string };
+
+export const ops = {
+  rollCall: (token: string, hostelId?: string) => request<RollSheet>(`/rollcall${qs({ hostelId })}`, { token }),
+  mark: (token: string, hostelId: string, studentId: string, status: "PRESENT" | "ABSENT") =>
+    request<Omit<RollSheet, "hostel" | "hostels">>("/rollcall/mark", { method: "POST", token, body: { hostelId, studentId, status } }),
+  markRest: (token: string, hostelId: string) => request<Omit<RollSheet, "hostel" | "hostels">>("/rollcall/mark-rest", { method: "POST", token, body: { hostelId } }),
+  closeRollCall: (token: string, hostelId: string) => request<Omit<RollSheet, "hostel" | "hostels">>("/rollcall/close", { method: "POST", token, body: { hostelId } }),
+  reportSummary: (token: string, from: string, to: string, hostelId?: string) => request<ReportSummary>(`/reports/summary${qs({ from, to, hostelId })}`, { token }),
+  reportLink: (token: string, type: ReportType, from: string, to: string, hostelId?: string) =>
+    request<{ url: string; expiresIn: number }>("/reports/link", { method: "POST", token, body: { type, from, to, hostelId } }).then((r) => `${BASE_URL}${r.url}`),
+  audit: (token: string, before?: string) => request<{ entries: AuditEntry[] }>(`/admin/audit${qs({ limit: 50, before })}`, { token }).then((r) => r.entries),
 };
 
 export function errorMessage(err: unknown, fallback = "Something went wrong"): string {

@@ -77,6 +77,7 @@ export default function VisitorPassPage() {
             code={pass.code}
             validFrom={pass.validFrom}
             validTo={pass.validTo}
+            repeat={pass.repeat}
             campusName={pass.campus.name}
             campusAddress={pass.campus.address}
           />

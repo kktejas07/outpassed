@@ -1,3 +1,4 @@
+import { describeRepeat, repeatWindowOpen } from "@outpassed/shared/passToken";
 /**
  * Outpass approval state machine. Pure functions only (no I/O) so the rules can
  * be unit-tested and reused by the gate logic.
@@ -189,6 +190,8 @@ export function checkVisitAtGate(opts: {
   validFrom: Date;
   validTo: Date;
   now: Date;
+  /** For a regular pass: only on these days and hours (campus time). */
+  repeat?: { days: number[]; from: string; to: string; tzo: number } | null;
 }): GateCheck {
   const { status, validFrom, validTo, now } = opts;
   if (status === "APPROVED") {
@@ -197,6 +200,9 @@ export function checkVisitAtGate(opts: {
     }
     if (now.getTime() > validTo.getTime()) {
       return { ok: false, code: "EXPIRED", message: "This visit has expired" };
+    }
+    if (opts.repeat && !repeatWindowOpen(opts.repeat, now.getTime())) {
+      return { ok: false, code: "OUTSIDE_HOURS", message: `This regular pass is for ${describeRepeat(opts.repeat)}` };
     }
     return { ok: true, direction: "ENTRY" };
   }

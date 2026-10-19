@@ -229,7 +229,17 @@ export const qrTokenResponseSchema = z.object({
   token: z.string(),
   /** Seconds until this token stops being accepted at the gate. */
   expiresIn: z.number().int(),
+  /**
+   * A longer-lived copy for the app to keep and show when the phone has no
+   * internet. Valid until the end of the pass window (at most a day).
+   */
+  offlineToken: z.string().nullable().default(null),
+  offlineExpiresAt: z.string().nullable().default(null),
 });
+
+/** The key guards' phones use to check passes without internet. */
+export const gateKeySchema = z.object({ alg: z.literal("Ed25519"), kid: z.string(), publicKey: z.string() });
+export type GateKey = z.infer<typeof gateKeySchema>;
 
 // --- Gate ---
 
@@ -241,6 +251,8 @@ export const gateScanSchema = z.object({
 
 export const gateVerdictSchema = z.object({
   allowed: z.boolean(),
+  /** True when the guard's phone decided without reaching the server. */
+  offline: z.boolean().optional(),
   /** Machine-readable reason, e.g. VALID, EXPIRED, NOT_YET_VALID, BAD_SIGNATURE. */
   code: z.string(),
   message: z.string(),
@@ -311,6 +323,17 @@ export const visitorTypeSchema = z.enum([
   "DELIVERY",
 ]);
 
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM, e.g. 10:00");
+
+/** A regular pass: works on these weekdays (0 = Sunday), between these hours, until validTo. */
+export const repeatRuleSchema = z
+  .object({
+    days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+    from: hhmm,
+    to: hhmm,
+  })
+  .refine((r) => r.from < r.to, { message: "End time must be after start time", path: ["to"] });
+
 export const createVisitSchema = z
   .object({
     visitorName: z.string().trim().min(1).max(120),
@@ -319,9 +342,15 @@ export const createVisitSchema = z
     purpose: z.string().trim().min(1).max(200),
     validFrom: isoDateSchema,
     validTo: isoDateSchema,
+    /** Makes this a regular pass, e.g. a parent who visits every Sunday. */
+    repeat: repeatRuleSchema.optional(),
   })
   .refine((v) => new Date(v.validTo) > new Date(v.validFrom), {
     message: "validTo must be after validFrom",
+    path: ["validTo"],
+  })
+  .refine((v) => new Date(v.validTo).getTime() - new Date(v.validFrom).getTime() <= (v.repeat ? 184 : 14) * 86_400_000, {
+    message: "A visit can last at most 14 days; a regular pass at most 6 months",
     path: ["validTo"],
   });
 
@@ -354,6 +383,8 @@ export const visitSchema = z.object({
   code: z.string(),
   /** Public link to the visitor's pass (QR + code), for sharing over WhatsApp/SMS. */
   passUrl: z.string(),
+  /** Set for a regular pass. */
+  repeat: z.object({ days: z.array(z.number().int()), from: z.string(), to: z.string() }).nullable(),
   createdAt: z.string(),
 });
 
@@ -368,6 +399,7 @@ export const publicVisitPassSchema = z.object({
   code: z.string(),
   /** Signed QR token; null once the visit is over or was declined. */
   qrToken: z.string().nullable(),
+  repeat: z.object({ days: z.array(z.number().int()), from: z.string(), to: z.string() }).nullable().default(null),
   campus: z.object({ name: z.string(), address: z.string() }),
 });
 

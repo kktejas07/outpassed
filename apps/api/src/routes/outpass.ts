@@ -18,6 +18,8 @@ import { guardianIds, notifyLater } from "../lib/notify";
 import { studentInHostels, wardenScope, wardensFor } from "../lib/hostels";
 import { when } from "../lib/time";
 import { requireRole } from "../plugins/auth";
+import { audit } from "../lib/audit";
+import { outpassToken } from "../lib/passes";
 import { HttpError } from "../plugins/errorHandler";
 
 /** Which outpasses the caller is allowed to see. */
@@ -191,6 +193,13 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
 
     const name = updated.student.name;
     const data = { outpassId: id };
+    await audit(
+      request,
+      result.override ? "OUTPASS_OVERRIDE" : body.decision === "APPROVE" ? "OUTPASS_APPROVED" : "OUTPASS_REJECTED",
+      `${result.override ? "Overrode parent step and approved" : body.decision === "APPROVE" ? "Approved" : "Rejected"} ${name}'s outpass to ${updated.destination}${body.reason ? ` — ${body.reason}` : ""}`,
+      { type: "outpass", id },
+      { step: result.step, reason: body.reason ?? null },
+    );
     if (result.nextStatus === "PENDING_WARDEN") {
       notifyLater([updated.studentId], {
         kind: "OUTPASS_PARENT_APPROVED",
@@ -307,6 +316,12 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     });
 
     const approved = decision === "APPROVE";
+    await audit(
+      request,
+      approved ? "EXTENSION_APPROVED" : "EXTENSION_REJECTED",
+      `${approved ? "Gave" : "Declined"} ${updated.student.name} more time (${when(ext.previousReturnBy)} → ${when(ext.requestedReturnBy)})`,
+      { type: "outpass", id },
+    );
     const body = approved
       ? `You can return by ${when(ext.requestedReturnBy)}.`
       : `Please return by ${when(ext.previousReturnBy)} as approved.`;
@@ -333,9 +348,13 @@ export async function outpassRoutes(app: FastifyInstance): Promise<void> {
     if (current.status !== "APPROVED" && current.status !== "OUT") {
       throw new FlowError("NOT_APPROVED", "A QR code is only available once the pass is approved");
     }
+    const now = new Date();
+    const offline = outpassToken(current, { offline: true }, now);
     const response: QrTokenResponse = {
-      token: issueQrToken(id, "OUTPASS", env.QR_SECRET),
+      token: outpassToken(current, { offline: false }, now).token,
       expiresIn: env.QR_TTL_SECONDS,
+      offlineToken: offline.token,
+      offlineExpiresAt: new Date(offline.exp * 1000).toISOString(),
     };
     return response;
   });

@@ -36,7 +36,7 @@ describe("visitor pass link", () => {
 
     const pub = await app.inject({ method: "GET", url: `/public/visit-pass/${token}` });
     expect(pub.statusCode).toBe(200);
-    expect(pub.json()).toMatchObject({ visitorName: "Meena", code: visit.code, qrToken: expect.stringMatching(/^v1\./) });
+    expect(pub.json()).toMatchObject({ visitorName: "Meena", code: visit.code, qrToken: expect.stringMatching(/^v2\./) });
     expect(JSON.stringify(pub.json())).not.toContain("+919811111111");
 
     const byCode = await app.inject({ method: "GET", url: `/gate/lookup?code=${visit.code}`, headers: auth(guard.token) });

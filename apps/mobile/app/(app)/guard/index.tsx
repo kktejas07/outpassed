@@ -115,7 +115,7 @@ export default function GuardScan() {
                 disabled={!manual.trim()}
                 onPress={() => {
                   const v = manual.trim();
-                  void desk.check(v.startsWith("v1.") ? { qr: v } : /^\d{6}$/.test(v) ? { visitCode: v } : { rollNo: v });
+                  void desk.check(/^v[12]\./.test(v) ? { qr: v } : /^\d{6}$/.test(v) ? { visitCode: v } : { rollNo: v });
                 }}
               />
             </FadeIn>
@@ -146,7 +146,12 @@ export default function GuardScan() {
             {s.phase === "done" && s.queued ? "Saved on this device — it will sync when the network is back." : verdict.message}
           </Text>
 
-          {verdict.person && verdict.kind === "OUTPASS" ? (
+          {verdict.offline ? (
+            <View style={styles.noPhoto}>
+              <Ionicons name="cloud-offline-outline" size={18} color={color.amber} />
+              <Text variant="label" style={{ flex: 1, color: color.amber }}>Checked on this phone (no internet). Compare with their college ID.</Text>
+            </View>
+          ) : verdict.person && verdict.kind === "OUTPASS" ? (
             photoSrc(verdict.person.photoUrl) ? (
               // Big enough to compare with the face in front of the guard.
               <Image source={{ uri: photoSrc(verdict.person.photoUrl)! }} style={styles.photo} accessibilityLabel={`Photo of ${verdict.person.name} on file`} />

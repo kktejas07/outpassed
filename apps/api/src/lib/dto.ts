@@ -115,6 +115,7 @@ export function toVisitDto(row: VisitWithHost): VisitDto {
     checkedOutAt: iso(row.checkedOutAt),
     code: row.code,
     passUrl: passUrl(row.passToken),
+    repeat: row.repeatDays.length && row.dailyFrom && row.dailyTo ? { days: row.repeatDays, from: row.dailyFrom, to: row.dailyTo } : null,
     createdAt: row.createdAt.toISOString(),
   };
 }

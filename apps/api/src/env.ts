@@ -16,6 +16,13 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("*"),
   /** Signs gate QR codes. Falls back to JWT_SECRET when unset. */
   QR_SECRET: z.string().min(16).optional(),
+  /**
+   * Ed25519 seed (32 bytes, base64) that signs gate passes so guards can check
+   * them offline. Derived from QR_SECRET when unset; set it to rotate separately.
+   */
+  QR_SIGNING_KEY: z.string().optional(),
+  /** Campus time zone, for regular visitor hours and roll-call dates. */
+  CAMPUS_TZ: z.string().default("Asia/Kolkata"),
   /** How long one rendered QR code is accepted at the gate. */
   QR_TTL_SECONDS: z.coerce.number().int().min(10).max(600).default(45),
   /**

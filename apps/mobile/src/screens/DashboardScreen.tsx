@@ -44,6 +44,8 @@ export function DashboardScreen() {
           <FadeIn index={8}>
             <QuickActions
               actions={[
+                { key: "rollcall", label: "Roll call", icon: "moon-outline", onPress: () => router.push("/rollcall") },
+                { key: "reports", label: "Reports", icon: "document-text-outline", onPress: () => router.push("/reports") },
                 { key: "notices", label: "Notice board", icon: "megaphone-outline", onPress: () => router.push("/notices") },
                 { key: "sos", label: "SOS alerts", icon: "alert-circle", tone: "danger", badge: s.openSos, onPress: () => router.push("/sos") },
                 { key: "invite", label: "Invite visitor", icon: "person-add-outline", onPress: () => router.push("/visit/new") },

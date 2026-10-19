@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, errorMessage } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useRibbon } from "../../ui/Ribbon";
+import { offlineVerdict } from "@outpassed/shared/passToken";
 import { enqueue, flush, loadQueue, subscribe, type QueuedEvent } from "./offlineQueue";
+import { gateKey, lastLocalMove, recordLocalMove, refreshGateKey } from "./offlineCheck";
 
 export type DeskState =
   | { phase: "idle" }
@@ -31,6 +33,11 @@ export function useGateDesk() {
     return subscribe(setPending);
   }, []);
 
+  // Keep the pass-checking key on the phone for when the network drops.
+  useEffect(() => {
+    if (token) void refreshGateKey(token).catch(() => undefined);
+  }, [token]);
+
   // Retry queued movements every 15 s.
   useEffect(() => {
     if (!token || pending.length === 0) return;
@@ -51,7 +58,20 @@ export function useGateDesk() {
               : await api.lookupRoll(token, input.rollNo.trim());
         setState({ phase: "verdict", verdict });
       } catch (err) {
-        setState({ phase: "error", message: errorMessage(err) });
+        const offline = err instanceof ApiError && err.status === 0;
+        if (offline && "qr" in input) {
+          // No network: check the pass's signature on this phone.
+          const k = await gateKey();
+          if (!k) return setState({ phase: "error", message: "No internet, and this phone hasn't downloaded the pass key yet. Connect once, then offline checks work." });
+          const local = offlineVerdict(input.qr, k.publicKey, Date.now());
+          const moved = local.subjectId ? await lastLocalMove(local.subjectId) : undefined;
+          const verdict = moved ? offlineVerdict(input.qr, k.publicKey, Date.now(), moved) : local;
+          return setState({ phase: "verdict", verdict: verdict as GateVerdict });
+        }
+        setState({
+          phase: "error",
+          message: offline ? "No internet. Codes and roll numbers need the network — ask them to show their QR, which works offline." : errorMessage(err),
+        });
       }
     },
     [token],
@@ -74,6 +94,7 @@ export function useGateDesk() {
         ...(photoMatched ? {} : { note: "Photo did not match — turned back" }),
       };
       setState({ phase: "saving", verdict });
+      if (photoMatched) void recordLocalMove(verdict.subjectId, direction);
       try {
         await api.recordEvent(token, input);
         setState({ phase: "done", verdict, accepted: photoMatched, queued: false });

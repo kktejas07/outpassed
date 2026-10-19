@@ -111,6 +111,42 @@ async function main() {
     },
   });
 
+  // More Block C residents, so roll call looks like a real night.
+  const residents = [
+    ["Rahul Verma", "23CS011", "101"], ["Sneha Pillai", "23CS012", "102"], ["Arjun Das", "23ME044", "110"],
+    ["Kavya Reddy", "23EC019", "111"], ["Imran Khan", "22CS090", "205"], ["Divya Nair", "22EE031", "206"],
+  ] as const;
+  for (const [name, rollNo, room] of residents) {
+    const email = `${name.split(" ")[0]!.toLowerCase()}@outpass.dev`;
+    const u = await upsertUser(email, name, "STUDENT");
+    await prisma.studentProfile.upsert({
+      where: { userId: u.id },
+      create: { userId: u.id, rollNo, hostel: blockC.name, hostelId: blockC.id, room, dateOfBirth: new Date("2005-06-01") },
+      update: { rollNo, hostel: blockC.name, hostelId: blockC.id, room },
+    });
+  }
+
+  // Asha's mother visits every Sunday: one regular pass for the semester.
+  await prisma.visit.deleteMany({ where: { hostId: asha } });
+  await prisma.visit.create({
+    data: {
+      visitorName: "Lakshmi Rao",
+      visitorPhone: "+919800000002",
+      visitorType: "PARENT",
+      purpose: "Sunday visit",
+      status: "APPROVED",
+      validFrom: hours(-1),
+      validTo: hours(24 * 90),
+      repeatDays: [0],
+      dailyFrom: "10:00",
+      dailyTo: "18:00",
+      hostId: asha,
+      registeredById: asha,
+      code: await newVisitCode(),
+      passToken: newPassToken(),
+    },
+  });
+
   console.log(`Seeded demo accounts. Password for all: ${PASSWORD}`);
   console.log("  student@outpass.dev  parent@outpass.dev  warden@outpass.dev  guard@outpass.dev  admin@outpass.dev");
 }

@@ -102,6 +102,7 @@ export default function People() {
         <Button compact tone="outline" icon="cloud-upload-outline" label="Import students" style={{ flex: 1 }} onPress={() => router.push("/import")} />
         <Button compact tone="outline" icon="business-outline" label="Hostels" style={{ flex: 1 }} onPress={() => router.push("/hostels")} />
       </View>
+      <Button compact tone="ghost" icon="list-outline" label="Activity log: who approved or changed what" style={{ alignSelf: "flex-start", paddingHorizontal: 0 }} onPress={() => router.push("/activity")} />
       {photoError ? <ErrorNote message={photoError} /> : null}
       {adding ? <AddStaff onDone={() => { setAdding(false); void vm.reload(); }} /> : null}
       <Chips options={roleFilters.map((r) => ({ value: r.value, label: r.label }))} value={vm.role} onChange={vm.setRole} />

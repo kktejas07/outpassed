@@ -141,6 +141,43 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
   WhatsApp server. Evolution API, WAHA and Meta's Cloud API are also
   supported directly. `WHATSAPP_ALERTS` picks which alerts go out.
 
+**Gate checks without internet**
+
+- Passes are signed with Ed25519 (`v2.<payload>.<signature>`). The payload
+  carries the name, the pass window and its status, so a guard's phone can
+  check a pass with only the public key it downloads from `GET /gate/key`.
+- With no network, the guard's phone shows "Checked on this phone" and queues
+  the movement; it syncs when the network is back, and the server re-checks
+  the live status then. The student's app keeps an offline copy of the pass
+  (valid until the return time, at most a day) for when their phone is offline.
+- The key is derived from `QR_SECRET`, or set `QR_SIGNING_KEY` (32 bytes,
+  base64) to manage it separately. Codes from older app versions (`v1`) are
+  still accepted.
+
+**Night roll call**
+
+- Wardens open **Roll call**, tap each student present (tap again for
+  absent) or mark the rest present, then finish. Students out on a pass are
+  filled in automatically. Finishing marks anyone left as absent and tells
+  their parents on WhatsApp and in the app; the other wardens of that hostel
+  get a summary. Marks can be corrected later, and corrections are logged.
+- A roll call before 6 AM counts for the previous night (`CAMPUS_TZ`).
+
+**Regular visitor pass**
+
+- "Regular visitor" on the invite form gives one pass for set weekdays and
+  hours (e.g. Sundays 10 AM–6 PM) for up to 6 months. The same code works on
+  every visit; outside those days and hours the gate refuses it.
+
+**Reports and activity log**
+
+- **Reports** shows outpasses, movements, late returns, roll-call absences,
+  visitors and who is often late, for today / 7 days / 30 days / this month
+  and per hostel. Each report downloads as CSV (opens in Excel) through a
+  10-minute signed link.
+- **People → Activity log** lists approvals, overrides, extensions, roll
+  calls, SOS responses, notices, imports, exports and account changes.
+
 **Photos at the gate**
 
 - Students add a photo on the **Me** tab (admins and wardens can add one in
@@ -226,6 +263,12 @@ on the server.
 | `GET` | `/notices` | any | Notice board for your audience, with read state |
 | `POST` | `/notices` | warden, admin | Post to students, parents or everyone |
 | `POST` | `/notices/:id/read` · `DELETE /notices/:id` | any · author/admin | Mark read · remove |
+| `GET` | `/gate/key` | guard, admin | Public key for checking passes offline |
+| `GET` | `/rollcall?hostelId=` | warden, admin | Tonight's roll-call sheet |
+| `POST` | `/rollcall/mark` · `/mark-rest` · `/close` | warden, admin | Mark a student, mark the rest present, finish (alerts parents of absentees) |
+| `GET` | `/reports/summary?from&to&hostelId` | warden, admin | Report numbers for a date range |
+| `POST` | `/reports/link` → `GET /reports/export.csv` | warden, admin | Signed 10-minute CSV download |
+| `GET` | `/admin/audit?limit&before` | admin | Activity log |
 | `GET` | `/health` | — | Liveness probe |
 
 Errors are always `{ "error": { "code": "...", "message": "..." } }`.
@@ -242,8 +285,18 @@ pnpm test           # unit + integration
 pnpm typecheck      # all workspaces
 ```
 
-Integration tests add rows to whatever database `DATABASE_URL` points at.
-Point it at a scratch database, or re-run the seed afterwards.
+Tests use their own database: `outpassed_test` next to your `DATABASE_URL`
+(or `TEST_DATABASE_URL`). It's created and migrated automatically, so tests
+never touch development or demo data. GitHub Actions runs the migrations,
+typecheck, tests and build on every push (`.github/workflows/ci.yml`).
+
+## Backups
+
+`scripts/backup-db.sh` writes a compressed `pg_dump` and keeps 14 days.
+Run it nightly from cron and copy the folder off the server. If you use
+Dokploy's PostgreSQL service, also turn on its scheduled backups to S3.
+Restore with `pg_restore --no-owner -d <database> <file>.dump`, and test a
+restore once before the pilot.
 
 ## Deploying to Dokploy
 

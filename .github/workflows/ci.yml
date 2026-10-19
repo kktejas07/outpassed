@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: outpassed
+          POSTGRES_PASSWORD: outpassed
+          POSTGRES_DB: outpassed
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U outpassed"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://outpassed:outpassed@localhost:5432/outpassed
+      JWT_SECRET: ci-only-secret-at-least-16-chars
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Apply migrations with Prisma (checks they run cleanly from scratch)
+        run: pnpm --filter @outpassed/api db:deploy
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: API tests (separate outpassed_test database)
+        run: pnpm test
+      - name: Build API
+        run: pnpm build

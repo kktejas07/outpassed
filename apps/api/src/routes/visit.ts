@@ -10,7 +10,8 @@ import {
 } from "@outpassed/shared";
 import { env } from "../env";
 import { FlowError } from "../domain/outpassFlow";
-import { issueQrToken } from "../domain/qrToken";
+import { visitToken } from "../lib/passes";
+import { describeRepeat } from "@outpassed/shared/passToken";
 import { prisma } from "../lib/prisma";
 import { toVisitDto, visitInclude } from "../lib/dto";
 import { background, notifyLater } from "../lib/notify";
@@ -67,6 +68,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
         registeredById: request.user.sub,
         code: await newVisitCode(),
         passToken: newPassToken(),
+        ...(body.repeat ? { repeatDays: [...new Set(body.repeat.days)].sort(), dailyFrom: body.repeat.from, dailyTo: body.repeat.to } : {}),
       },
       include: visitInclude,
     });
@@ -171,24 +173,30 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   /** The code the host forwards to the visitor. */
   app.get("/visits/:id/qr", async (request) => {
     const { id } = idParamSchema.parse(request.params);
-    const row = await prisma.visit.findFirst({ where: { ...visitWhere(request), id } });
+    const row = await prisma.visit.findFirst({ where: { ...visitWhere(request), id }, include: { host: true } });
     if (!row) throw new HttpError(404, "NOT_FOUND", "Visit not found");
     if (row.status !== "APPROVED" && row.status !== "CHECKED_IN") {
       throw new FlowError("NOT_APPROVED", "This visit is not approved");
     }
     const ttl = Math.max(60, Math.floor((row.validTo.getTime() - Date.now()) / 1000));
     const response: QrTokenResponse = {
-      token: issueQrToken(id, "VISIT", env.QR_SECRET),
+      token: visitToken(row, VISIT_QR_TTL_SECONDS),
       expiresIn: Math.min(ttl, VISIT_QR_TTL_SECONDS),
+      offlineToken: null,
+      offlineExpiresAt: null,
     };
     return response;
   });
 }
 
 /** Sends the visitor their pass link (QR + 6-digit code) on WhatsApp, so the host doesn't have to forward it. */
-function sendPassToVisitor(v: { visitorName: string; visitorPhone: string; code: string; passToken: string | null; validFrom: Date; validTo: Date; host: { name: string } }) {
+function sendPassToVisitor(v: { visitorName: string; visitorPhone: string; code: string; passToken: string | null; validFrom: Date; validTo: Date; host: { name: string }; repeatDays: number[]; dailyFrom: string | null; dailyTo: string | null }) {
   const to = normalizePhone(v.visitorPhone);
   if (!to || !v.passToken || !whatsappEnabled()) return;
-  const text = `Hi ${v.visitorName.split(" ")[0]}, ${v.host.name} has invited you to campus for ${when(v.validFrom)} – ${when(v.validTo)}.\n\nShow this pass at the gate, or tell the guard the code *${v.code}*:\n${passUrl(v.passToken)}`;
+  const span =
+    v.repeatDays.length && v.dailyFrom && v.dailyTo
+      ? `as a regular visitor (${describeRepeat({ days: v.repeatDays, from: v.dailyFrom, to: v.dailyTo })}) until ${when(v.validTo)}. Keep this message: the same pass works every time`
+      : `for ${when(v.validFrom)} – ${when(v.validTo)}`;
+  const text = `Hi ${v.visitorName.split(" ")[0]}, ${v.host.name} has invited you to campus ${span}.\n\nShow this pass at the gate, or tell the guard the code *${v.code}*:\n${passUrl(v.passToken)}`;
   background(() => sendWhatsApp({ to, text, kind: "VISITOR_PASS", title: `Visitor pass from ${v.host.name}`, body: `Code ${v.code} · ${passUrl(v.passToken!)}` }), "visitor pass whatsapp");
 }

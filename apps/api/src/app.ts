@@ -21,6 +21,8 @@ import { visitRoutes } from "./routes/visit";
 import { hostelRoutes } from "./routes/hostels";
 import { photoRoutes } from "./routes/photos";
 import { setupRoutes } from "./routes/setup";
+import { rollCallRoutes } from "./routes/rollcall";
+import { reportRoutes } from "./routes/reports";
 
 /** Builds the Fastify instance. Kept separate from listen() so tests can inject. */
 export async function buildApp(opts: { rateLimit?: boolean } = {}): Promise<FastifyInstance> {
@@ -81,6 +83,8 @@ export async function buildApp(opts: { rateLimit?: boolean } = {}): Promise<Fast
   await app.register(hostelRoutes);
   await app.register(photoRoutes);
   await app.register(setupRoutes);
+  await app.register(rollCallRoutes);
+  await app.register(reportRoutes);
 
   return app;
 }

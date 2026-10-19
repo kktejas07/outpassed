@@ -10,6 +10,10 @@ import { outpassInclude, toGateEventDto, type OutpassWithRelations } from "../li
 import { guardianIds, notifyLater } from "../lib/notify";
 import { clock } from "../lib/time";
 import { photoUrl } from "../lib/photo";
+import { verifyPassToken } from "@outpassed/shared/passToken";
+import { campusOffsetMinutes, passKeyId, passPublicKey } from "../lib/passKeys";
+import { repeatOf, studentDetail } from "../lib/passes";
+import type { Visit } from "@prisma/client";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 
@@ -31,11 +35,7 @@ function outpassVerdict(row: OutpassWithRelations, now: Date): GateVerdict {
     returnBy: row.returnBy,
     now,
   });
-  const profile = row.student.student;
-  const detail = [profile?.hostel, profile?.room ? `Room ${profile.room}` : null, profile?.rollNo]
-    .filter(Boolean)
-    .join(" · ");
-  const person = { name: row.student.name, detail: detail || "Student", photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt) };
+  const person = { name: row.student.name, detail: studentDetail(row.student.student), photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt) };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "OUTPASS", subjectId: row.id, person };
   }
@@ -56,11 +56,14 @@ function outpassVerdict(row: OutpassWithRelations, now: Date): GateVerdict {
   };
 }
 
-function visitVerdict(
-  visit: { id: string; status: "PENDING_HOST" | "APPROVED" | "REJECTED" | "CHECKED_IN" | "CHECKED_OUT"; validFrom: Date; validTo: Date; visitorName: string; purpose: string; host: { name: string } },
-  now: Date,
-): GateVerdict {
-  const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now });
+/** The regular-pass rule for a visit, with today's campus offset. */
+function repeatRule(v: Pick<Visit, "repeatDays" | "dailyFrom" | "dailyTo">, now: Date) {
+  const r = repeatOf(v);
+  return r ? { ...r, tzo: campusOffsetMinutes(now) } : null;
+}
+
+function visitVerdict(visit: Visit & { host: { name: string } }, now: Date): GateVerdict {
+  const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now, repeat: repeatRule(visit, now) });
   const person = { name: visit.visitorName, detail: `Visiting ${visit.host.name} · ${visit.purpose}`, photoUrl: null };
   if (!check.ok) {
     return { allowed: false, code: check.code, message: check.message, direction: null, kind: "VISIT", subjectId: visit.id, person };
@@ -85,7 +88,10 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
     const { token } = gateScanSchema.parse(request.body);
     const now = new Date();
 
-    const verified = verifyQrToken(token, env.QR_SECRET, { OUTPASS: env.QR_TTL_SECONDS, VISIT: VISIT_QR_TTL_SECONDS }, now);
+    // v2: Ed25519-signed (checkable offline). v1: older HMAC codes from earlier app versions.
+    const verified = token.trim().startsWith("v2.")
+      ? verifyPassToken(token, passPublicKey, now.getTime())
+      : verifyQrToken(token, env.QR_SECRET, { OUTPASS: env.QR_TTL_SECONDS, VISIT: VISIT_QR_TTL_SECONDS }, now);
     if (!verified.ok) {
       return denied(verified.code, TOKEN_MESSAGES[verified.code] ?? "Invalid pass");
     }
@@ -100,6 +106,12 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
     const visit = await prisma.visit.findUnique({ where: { id: sub }, include: { host: true } });
     if (!visit) return denied("NOT_FOUND", "This visit does not exist");
     return visitVerdict(visit, now);
+  });
+
+  /** The public key guards' phones keep for checking passes without internet. */
+  app.get("/gate/key", async (request) => {
+    requireRole(request, "GUARD", "ADMIN");
+    return { alg: "Ed25519" as const, kid: passKeyId, publicKey: passPublicKey };
   });
 
   /**
@@ -209,11 +221,13 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(201).send(toGateEventDto(event));
     }
 
-    const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now });
+    const check = checkVisitAtGate({ status: visit.status, validFrom: visit.validFrom, validTo: visit.validTo, now, repeat: repeatRule(visit, now) });
     if (!check.ok) throw new FlowError(check.code, check.message);
     if (check.direction !== body.direction) {
       throw new FlowError("WRONG_DIRECTION", `This visit expects an ${check.direction.toLowerCase()} scan`);
     }
+    // A regular pass is ready for the next visit once the visitor leaves.
+    const regular = visit.repeatDays.length > 0;
 
     const event = await prisma.$transaction(async (tx) => {
       const changed = await tx.visit.updateMany({
@@ -221,7 +235,7 @@ export async function gateRoutes(app: FastifyInstance): Promise<void> {
         data:
           check.direction === "ENTRY"
             ? { status: "CHECKED_IN", checkedInAt: now }
-            : { status: "CHECKED_OUT", checkedOutAt: now },
+            : { status: regular ? "APPROVED" : "CHECKED_OUT", checkedOutAt: now },
       });
       if (changed.count === 0) throw new FlowError("CONFLICT", "This visit was just scanned");
       return tx.gateEvent.create({

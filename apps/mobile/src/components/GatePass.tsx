@@ -19,8 +19,11 @@ export function GatePass({
   token,
   lifetime,
   error,
+  offline,
 }: {
   outpass: OutpassDto;
+  /** Showing the saved copy because this phone has no internet. */
+  offline?: boolean;
   token: string | null;
   /** Seconds this token is shown before it's refreshed. */
   lifetime: number;
@@ -49,10 +52,17 @@ export function GatePass({
             <Text variant="heading">{outpass.student.name}</Text>
             <Text variant="caption">{studentLine(outpass.student) || "Student"}</Text>
           </View>
-          <View style={styles.live}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
+          {offline ? (
+            <View style={[styles.live, { backgroundColor: color.amberSoft }]}>
+              <Ionicons name="cloud-offline" size={11} color={color.amber} />
+              <Text style={[styles.liveText, { color: color.amber }]}>OFFLINE</Text>
+            </View>
+          ) : (
+            <View style={styles.live}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.qrBox}>
@@ -68,7 +78,13 @@ export function GatePass({
           <Animated.View style={[styles.bar, { width: drain.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
         </View>
         <Text variant="caption" style={{ textAlign: "center" }}>
-          {error ? error : out ? "Show this when you're back at the gate" : "Show this to the guard at the gate"}
+          {error
+            ? error
+            : offline
+              ? "No internet. This saved pass still works at the gate."
+              : out
+                ? "Show this when you're back at the gate"
+                : "Show this to the guard at the gate"}
         </Text>
 
         <View style={styles.perf}>

@@ -1,6 +1,7 @@
 import type { Decision, OutpassDto } from "@outpassed/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errorMessage } from "../../api/client";
+import { api, ApiError, errorMessage } from "../../api/client";
+import { readJson, safeKey, writeJson } from "../../lib/store";
 import { useSession } from "../../auth/session";
 import { useAction, useQuery } from "../../lib/useQuery";
 import { useRibbon } from "../../ui/Ribbon";
@@ -28,7 +29,7 @@ export function useOutpassDetail(id: string) {
 
   // --- Live QR (student, approved or out) ---
   const wantsQr = role === "STUDENT" && !!pass && (pass.status === "APPROVED" || pass.status === "OUT");
-  const [qr, setQr] = useState<{ token: string; lifetime: number } | null>(null);
+  const [qr, setQr] = useState<{ token: string; lifetime: number; offline?: boolean } | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,9 +41,17 @@ export function useOutpassDetail(id: string) {
       const lifetime = Math.max(10, res.expiresIn - 15);
       setQr({ token: res.token, lifetime });
       setQrError(null);
+      // Keep a copy that works at the gate even if this phone loses internet.
+      if (res.offlineToken) void writeJson(safeKey(`outpass.offlinePass.${id}`), { token: res.offlineToken, until: res.offlineExpiresAt });
       timer.current = setTimeout(fetchQr, lifetime * 1000);
     } catch (err) {
-      setQrError(errorMessage(err, "Couldn't load your code"));
+      const saved = err instanceof ApiError && err.status === 0 ? await readJson<{ token: string; until: string | null }>(safeKey(`outpass.offlinePass.${id}`)) : null;
+      if (saved && (!saved.until || new Date(saved.until) > new Date())) {
+        setQr({ token: saved.token, lifetime: 30, offline: true });
+        setQrError(null);
+      } else {
+        setQrError(errorMessage(err, "Couldn't load your code"));
+      }
       timer.current = setTimeout(fetchQr, 8000);
     }
   }, [token, id]);

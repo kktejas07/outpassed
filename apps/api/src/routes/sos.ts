@@ -6,6 +6,7 @@ import { idsOfRoles, notifyLater } from "../lib/notify";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
 import { photoUrl } from "../lib/photo";
+import { audit } from "../lib/audit";
 import { HttpError } from "../plugins/errorHandler";
 
 const sosInclude = {
@@ -97,6 +98,7 @@ export async function sosRoutes(app: FastifyInstance): Promise<void> {
     const row = await prisma.sosAlert.findUnique({ where: { id }, include: sosInclude });
     if (!row) throw new HttpError(404, "NOT_FOUND", "Alert not found");
     if (changed.count === 0) return toSosDto(row); // someone else already responded
+    await audit(request, "SOS_ACKNOWLEDGED", `Responded to ${row.raisedBy.name}'s ${KIND_LABEL[row.kind].toLowerCase()} alert`, { type: "sos", id });
     notifyLater([row.raisedById], {
       kind: "SOS_ACKNOWLEDGED",
       title: "Help is on the way",
@@ -131,6 +133,7 @@ export async function sosRoutes(app: FastifyInstance): Promise<void> {
     });
     if (changed.count === 0) throw new FlowError("ALREADY_RESOLVED", "This alert is already closed");
     const updated = await prisma.sosAlert.findUniqueOrThrow({ where: { id }, include: sosInclude });
+    await audit(request, "SOS_RESOLVED", `Closed ${updated.raisedBy.name}'s alert${updated.resolution ? ` — ${updated.resolution}` : ""}`, { type: "sos", id });
     const recipients = staff ? [updated.raisedById] : (await idsOfRoles([...STAFF]));
     notifyLater(recipients.filter((u) => u !== request.user.sub), {
       kind: "SOS_RESOLVED",

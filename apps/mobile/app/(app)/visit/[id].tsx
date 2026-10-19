@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Platform, Share } from "react-native";
+import { describeRepeat } from "@outpassed/shared/passToken";
 import { InvitePass } from "../../../src/components/InvitePass";
 import { useVisitDetail } from "../../../src/features/visits/useVisits";
 import { visitorTypes, visitStatus, when } from "../../../src/lib/format";
@@ -53,7 +54,7 @@ export default function VisitDetail() {
     >
       {vm.qr ? (
         <PopIn>
-          <InvitePass hostName={v.host.name} qrToken={vm.qr.token} code={v.code} validFrom={v.validFrom} validTo={v.validTo} />
+          <InvitePass hostName={v.host.name} qrToken={vm.qr.token} code={v.code} validFrom={v.validFrom} validTo={v.validTo} repeat={v.repeat} />
         </PopIn>
       ) : null}
       {vm.qr ? (
@@ -69,6 +70,7 @@ export default function VisitDetail() {
           <KeyValue label="Phone" value={v.visitorPhone} />
           <KeyValue label="Purpose" value={v.purpose} />
           <KeyValue label="Entry code" value={v.code} />
+          {v.repeat ? <KeyValue label="Regular pass" value={describeRepeat(v.repeat)} /> : null}
           <KeyValue label="From" value={when(v.validFrom)} />
           <KeyValue label="Until" value={when(v.validTo)} />
           {v.checkedInAt ? <KeyValue label="Arrived" value={when(v.checkedInAt)} /> : null}

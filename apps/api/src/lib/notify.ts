@@ -32,7 +32,9 @@ export type NotificationKind =
   | "SOS_RAISED"
   | "SOS_ACKNOWLEDGED"
   | "SOS_RESOLVED"
-  | "NOTICE_POSTED";
+  | "NOTICE_POSTED"
+  | "ROLLCALL_ABSENT"
+  | "ROLLCALL_DONE";
 
 export type NotificationInput = {
   kind: NotificationKind;
