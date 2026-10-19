@@ -20,7 +20,7 @@ export function WebFrame({ children }: { children: ReactNode }) {
           <Brand size={56} />
           <Text variant="title" style={{ textAlign: "center" }}>Outpasses and visitors for your campus</Text>
           <Text variant="caption" style={{ textAlign: "center", maxWidth: 300 }}>
-            Built for phones. Get the iOS or Android app for the camera scanner and the smoothest gate pass.
+            The same app on the web, iPhone and Android. Sign in with your college account.
           </Text>
         </View>
       ) : null}

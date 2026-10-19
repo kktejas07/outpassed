@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 import { campus, errorMessage } from "../../../src/api/client";
 import { useSession } from "../../../src/auth/session";
 import { useQuery } from "../../../src/lib/useQuery";
@@ -72,7 +72,7 @@ export default function Sell() {
             </View>
           )}
         </Pressable>
-        {Platform.OS !== "web" ? <Button compact tone="ghost" icon="camera" label="Take a photo instead" onPress={() => void addPhoto("camera")} /> : null}
+        <Button compact tone="ghost" icon="camera" label="Take a photo instead" onPress={() => void addPhoto("camera")} />
       </FadeIn>
       <FadeIn index={1} style={{ gap: 14 }}>
         <Field label="What are you selling?" value={title} onChangeText={setTitle} placeholder="e.g. Engineering Maths textbook" />

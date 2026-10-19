@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
-import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 import { errorMessage } from "../api/client";
 import { pickPhoto } from "../features/photo/pickPhoto";
 import { color, font, radius } from "../theme/tokens";
@@ -16,7 +16,7 @@ export function PhotoCapture({ value, onChange, label = "Photo of the person", h
   async function take() {
     setError(null);
     try {
-      const p = await pickPhoto(Platform.OS === "web" ? "library" : "camera");
+      const p = await pickPhoto("camera", "back");
       if (p) onChange(p);
     } catch (err) {
       setError(errorMessage(err, "Couldn't open the camera"));

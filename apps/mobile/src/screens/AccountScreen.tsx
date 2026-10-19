@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { api, errorMessage } from "../api/client";
 import { pickPhoto } from "../features/photo/pickPhoto";
 import { useRibbon } from "../ui/Ribbon";
@@ -58,9 +58,7 @@ export function AccountScreen() {
             </Text>
           ) : null}
           <View style={styles.photoRow}>
-            {Platform.OS !== "web" ? (
-              <Button compact tone="outline" icon="camera-outline" label="Take photo" loading={busy} onPress={() => changePhoto("camera")} style={{ flex: 1 }} />
-            ) : null}
+            <Button compact tone="outline" icon="camera-outline" label="Take photo" loading={busy} onPress={() => changePhoto("camera")} style={{ flex: 1 }} />
             <Button
               compact
               tone={user.photoUrl ? "outline" : "accent"}

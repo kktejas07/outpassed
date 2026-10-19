@@ -6,7 +6,7 @@ import * as ImagePicker from "expo-image-picker";
  * 480 px, which keeps uploads around 40–80 KB. Returns base64 JPEG, or null
  * if they cancelled.
  */
-export async function pickPhoto(source: "camera" | "library"): Promise<string | null> {
+export async function pickPhoto(source: "camera" | "library", facing: "front" | "back" = "front"): Promise<string | null> {
   if (source === "camera") {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) throw new Error("Allow camera access in Settings to take a photo.");
@@ -16,7 +16,8 @@ export async function pickPhoto(source: "camera" | "library"): Promise<string | 
     allowsEditing: true,
     aspect: [1, 1],
     quality: 1,
-    cameraType: ImagePicker.CameraType.front,
+    // Selfies for your own photo; the back camera when photographing someone else (the gate).
+    cameraType: facing === "back" ? ImagePicker.CameraType.back : ImagePicker.CameraType.front,
   };
   const result = source === "camera" ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
   if (result.canceled || !result.assets[0]) return null;
