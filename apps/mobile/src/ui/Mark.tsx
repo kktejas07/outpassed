@@ -1,23 +1,33 @@
 import { View } from "react-native";
 import { color } from "../theme/tokens";
 
-/** The Outpass mark at small sizes: teal tile, indigo arch (the gate), white keystone. */
-export function Mark({ size = 34 }: { size?: number }) {
-  const w = size;
+/**
+ * The Outpass mark, "scan and go": three QR corners on an indigo tile, and
+ * the fourth corner is a teal arrow heading out. Drawn on a 64-unit grid and
+ * scaled, so it stays sharp at any size. Matches assets/icon.png.
+ */
+export function Mark({ size = 34, inverse, bare }: { size?: number; /** White tile with indigo corners, for indigo backgrounds. */ inverse?: boolean; /** No tile: white corners straight on the background (illustrations). */ bare?: boolean }) {
+  const u = size / 64;
+  const ink = inverse && !bare ? color.indigo : color.white;
+  const finder = (x: number, y: number) => (
+    <View
+      key={`${x}-${y}`}
+      style={{ position: "absolute", left: (x - 2.25) * u, top: (y - 2.25) * u, width: 21.5 * u, height: 21.5 * u, borderRadius: 6.5 * u, borderWidth: 4.5 * u, borderColor: ink, alignItems: "center", justifyContent: "center" }}
+    >
+      <View style={{ width: 6 * u, height: 6 * u, borderRadius: 1.5 * u, backgroundColor: ink }} />
+    </View>
+  );
+  const bar = 6 * u;
   return (
-    <View style={{ width: w, height: w, borderRadius: w * 0.28, backgroundColor: color.accentLight, alignItems: "center", justifyContent: "flex-end", overflow: "hidden" }}>
-      <View
-        style={{
-          width: w * 0.5,
-          height: w * 0.58,
-          borderTopLeftRadius: w * 0.25,
-          borderTopRightRadius: w * 0.25,
-          borderWidth: w * 0.1,
-          borderBottomWidth: 0,
-          borderColor: color.head,
-        }}
-      />
-      <View style={{ position: "absolute", top: w * 0.13, width: w * 0.15, height: w * 0.15, backgroundColor: color.white, borderRadius: 2, transform: [{ rotate: "45deg" }] }} />
+    <View accessibilityLabel="Outpass" style={{ width: size, height: size, borderRadius: 18 * u, backgroundColor: bare ? "transparent" : inverse ? color.white : color.indigo, overflow: "hidden" }}>
+      {finder(10, 10)}
+      {finder(37, 10)}
+      {finder(10, 37)}
+      {/* The arrow's shaft, from (38.5, 38.5) to (52, 52) */}
+      <View style={{ position: "absolute", left: (45.25 - 12.5) * u, top: 45.25 * u - bar / 2, width: 25 * u, height: bar, borderRadius: bar / 2, backgroundColor: color.accentLight, transform: [{ rotate: "45deg" }] }} />
+      {/* Its head: the corner at (52.5, 52.5) */}
+      <View style={{ position: "absolute", left: (42 - 3) * u, top: 52.5 * u - bar / 2, width: 16.5 * u, height: bar, borderRadius: bar / 2, backgroundColor: color.accentLight }} />
+      <View style={{ position: "absolute", left: 52.5 * u - bar / 2, top: (42 - 3) * u, width: bar, height: 16.5 * u, borderRadius: bar / 2, backgroundColor: color.accentLight }} />
     </View>
   );
 }

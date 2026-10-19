@@ -99,6 +99,7 @@ export function CampusHubScreen() {
       hero={{
         greeting: "Campus life",
         title: "What's happening",
+        headline: "What's happening\non campus",
         chip: fees && fees.totals.overdue
           ? { label: `${fees.totals.overdue} fee${fees.totals.overdue > 1 ? "s" : ""} overdue`, tone: "danger" }
           : { label: h ? `${h.events.length} upcoming event${h.events.length === 1 ? "" : "s"}` : "Loading…", tone: "info" },

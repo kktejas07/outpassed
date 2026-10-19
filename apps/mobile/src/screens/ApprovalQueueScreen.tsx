@@ -17,12 +17,14 @@ import { Screen } from "../ui/Screen";
 export function ApprovalQueueScreen() {
   const vm = useApprovalQueue();
   const { user } = useSession();
-  const waitingCount = vm.tab === "waiting" ? vm.items.length : undefined;
+  // Wardens also see requests still with faculty or a parent; those aren't waiting on them.
+  const waitingCount = vm.tab === "waiting" ? (vm.isWarden ? vm.readyForWarden.length + vm.askingMoreTime.length : vm.items.length) : undefined;
   return (
     <Screen
       hero={{
         greeting: greeting(),
         title: user?.name ?? "Approvals",
+        headline: waitingCount ? "Requests\nwaiting on you" : vm.tab === "waiting" ? "You're all\ncaught up" : "Every request\nin one place",
         chip: waitingCount
           ? { label: `${waitingCount} request${waitingCount > 1 ? "s" : ""} waiting on you`, tone: "warn" }
           : { label: vm.isWarden ? "No requests waiting" : "All caught up", tone: "safe" },

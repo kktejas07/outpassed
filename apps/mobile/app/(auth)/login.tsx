@@ -2,8 +2,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { SetupStatus } from "@outpassed/shared";
 import { Link, router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { Brand } from "../../src/components/Brand";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { WelcomeHero } from "../../src/components/WelcomeHero";
 import { useSession } from "../../src/auth/session";
 import { api, errorMessage } from "../../src/api/client";
 import { color, font, radius } from "../../src/theme/tokens";
@@ -11,7 +12,6 @@ import { Button } from "../../src/ui/Button";
 import { ErrorNote, Segmented } from "../../src/ui/bits";
 import { Field } from "../../src/ui/Field";
 import { FadeIn } from "../../src/ui/motion";
-import { Screen } from "../../src/ui/Screen";
 import { Text } from "../../src/ui/Text";
 
 type Method = "phone" | "email";
@@ -80,13 +80,12 @@ export default function LoginScreen() {
   const signInEmail = () => run(() => signIn(email.trim(), password), "Sign in failed");
 
   return (
-    <Screen>
-      <View style={styles.top}>
-        <FadeIn><Brand /></FadeIn>
-        <FadeIn index={1}>
-          <Text variant="caption" style={{ textAlign: "center" }}>Outpasses and visitors for your campus</Text>
-        </FadeIn>
-      </View>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <StatusBar style="light" />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <WelcomeHero />
+      <View style={styles.body}>
+      <Text style={styles.formTitle}>Sign in</Text>
       <FadeIn index={2} style={{ gap: 14 }}>
         <Segmented
           options={[
@@ -180,12 +179,16 @@ export default function LoginScreen() {
           </View>
         </FadeIn>
       ) : null}
-    </Screen>
+      </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { alignItems: "center", gap: 10, paddingTop: 56, paddingBottom: 20 },
+  root: { flex: 1, backgroundColor: color.ground },
+  body: { paddingHorizontal: 20, paddingTop: 22, gap: 14 },
+  formTitle: { fontFamily: font.display, fontSize: 22, color: color.ink, letterSpacing: -0.3 },
   link: { textAlign: "center", alignSelf: "center", marginTop: 4 },
   info: { padding: 12, borderRadius: 14, backgroundColor: color.indigoTint },
   demo: { marginTop: 22, padding: 14, gap: 12, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: "dashed", borderColor: color.headSub, backgroundColor: color.white },

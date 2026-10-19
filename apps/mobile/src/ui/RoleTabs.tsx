@@ -9,7 +9,7 @@ import { Text } from "./Text";
 
 export type TabDef = { name: string; title: string; icon: keyof typeof Ionicons.glyphMap; iconOn: keyof typeof Ionicons.glyphMap };
 
-/** Floating rounded tab bar; the active tab sits in a soft indigo pill with its label. */
+/** Floating brand-coloured tab bar; the active tab sits in a white pill with its label. */
 function FloatingBar({ state, descriptors, emitter, navigateToTab, tabs }: BottomTabBarProps & { tabs: TabDef[] }) {
   const insets = useSafeAreaInsets();
   return (
@@ -59,7 +59,7 @@ function TabPill({ focused, icon, label }: { focused: boolean; icon: keyof typeo
     <View style={styles.pill}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.pillOn, { opacity: v, transform: [{ scaleX: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]} />
       <Animated.View style={{ transform: [{ translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }}>
-        <Ionicons name={icon} size={21} color={focused ? color.indigoDeep : color.faint} />
+        <Ionicons name={icon} size={21} color={focused ? color.indigoDeep : "rgba(255,255,255,0.78)"} />
       </Animated.View>
       {focused ? (
         <Animated.View style={{ opacity: v, transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }}>
@@ -87,17 +87,17 @@ const styles = StyleSheet.create({
   outer: { backgroundColor: color.ground, paddingHorizontal: 14, paddingTop: 6 },
   bar: {
     flexDirection: "row",
-    backgroundColor: color.white,
-    borderRadius: radius.lg + 4,
-    padding: 8,
-    shadowColor: "#1E1B4B",
-    shadowOpacity: 0.1,
+    backgroundColor: color.indigo,
+    borderRadius: radius.pill,
+    padding: 7,
+    shadowColor: "#3730A3",
+    shadowOpacity: 0.3,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
   item: { flex: 1, alignItems: "center" },
-  pill: { height: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  pillOn: { backgroundColor: color.indigoTint, borderRadius: radius.md },
+  pill: { height: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: radius.pill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  pillOn: { backgroundColor: color.white, borderRadius: radius.pill },
   label: { fontFamily: font.bodyBold, fontSize: 12.5, color: color.indigoDeep },
 });

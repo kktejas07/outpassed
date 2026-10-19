@@ -270,10 +270,13 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 - Each screen gets its state and actions from a viewmodel hook in
   `src/features/*`.
 - Shared UI is in `src/ui` and `src/components`, and design tokens are in
-  `src/theme/tokens.ts`. The palette is "Indigo + Teal": a dark indigo header
-  band with soft rings, teal for actions and safe states, and borderless white
-  cards on a cool grey ground, with Sora and Manrope type. A ribbon slides in
-  after each action; big moments also drop confetti.
+  `src/theme/tokens.ts`. The look follows the CardioLife reference: quiet
+  white pages with one bold indigo card per screen, white headers (avatar,
+  greeting, bell) over a big two-tone title, an indigo tab bar with a white
+  active pill, pill buttons and chips, and overlapping avatars for the people
+  involved. Teal marks allowed and safe states, red denied and overdue. Sora
+  and Manrope type. A ribbon slides in after each action; big moments also
+  drop confetti.
 
 ## API
 
@@ -403,8 +406,8 @@ Create a Postgres service in Dokploy. Copy its connection string; that becomes
 
 Serves the landing page at `/` and the web version of the React Native app at
 `/app`. The image builds the app with `expo export -p web` in its first stage,
-so there's nothing to build by hand. Landing-page screenshots live in
-`apps/web/screens`.
+so there's nothing to build by hand. The landing page (`apps/web/index.html`)
+explains the app in words and one illustration rather than screenshots.
 
 - **Build argument:** `EXPO_PUBLIC_API_URL` (default
   `https://api.outpassed.studentalumni.ai`). The API URL is baked into the web

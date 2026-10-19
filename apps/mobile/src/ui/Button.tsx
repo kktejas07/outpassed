@@ -63,8 +63,8 @@ export function Button({
 }
 
 const styles = StyleSheet.create({
-  base: { height: 54, borderRadius: radius.md, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
-  compact: { height: 40, borderRadius: radius.sm, paddingHorizontal: 14 },
+  base: { height: 54, borderRadius: radius.pill, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
+  compact: { height: 40, borderRadius: radius.pill, paddingHorizontal: 16 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   label: { fontFamily: font.bodyBold, fontSize: 15.5 },
   labelCompact: { fontSize: 14 },

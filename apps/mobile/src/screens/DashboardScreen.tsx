@@ -16,6 +16,7 @@ export function DashboardScreen() {
       hero={{
         greeting: "Live · refreshes every 30 s",
         title: "Campus now",
+        headline: "Campus now\nat a glance",
         chip: s
           ? { label: `${s.outNow} out · ${s.overdue} overdue · ${s.visitorsOnSite} visitors`, tone: s.overdue || s.openSos ? "danger" : "safe" }
           : undefined,

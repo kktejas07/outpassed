@@ -51,6 +51,7 @@ export default function GuardScan() {
       hero={{
         greeting: "Security desk,",
         title: "Main Gate",
+        headline: "Main Gate\nscan or look up a pass",
         chip: desk.pending.length
           ? { label: `${desk.pending.length} waiting to sync`, tone: "warn" }
           : { label: "On duty · online", tone: "safe" },

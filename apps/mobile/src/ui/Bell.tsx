@@ -16,7 +16,7 @@ export function Bell() {
       onPress={() => router.push("/notifications")}
       style={styles.btn}
     >
-      <Ionicons name={unread ? "notifications" : "notifications-outline"} size={21} color={color.white} />
+      <Ionicons name={unread ? "notifications" : "notifications-outline"} size={20} color={color.ink} />
       {unread ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{unread > 9 ? "9+" : unread}</Text>
@@ -27,7 +27,7 @@ export function Bell() {
 }
 
 const styles = StyleSheet.create({
-  btn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
-  badge: { position: "absolute", top: 3, right: 2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: color.accentLight, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: color.head },
+  btn: { width: 42, height: 42, borderRadius: 21, backgroundColor: color.white, borderWidth: 1, borderColor: color.line, alignItems: "center", justifyContent: "center" },
+  badge: { position: "absolute", top: 3, right: 2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: color.indigo, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: color.white },
   badgeText: { fontFamily: font.bodyBold, fontSize: 10, color: color.white, lineHeight: 12 },
 });
