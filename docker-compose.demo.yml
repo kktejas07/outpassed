@@ -1,0 +1,68 @@
+# Outpass demo / staging stack: Postgres + API + website, with mock data and
+# one-tap demo logins. NOT for a real college (the demo data resets on boot).
+#
+# Local:   docker compose -f docker-compose.demo.yml up --build
+#          then open http://localhost:8080/app  (API on http://localhost:3000)
+#
+# Dokploy: Create → Compose → this file. Set the env vars below in the
+#          Environment tab, then add domains: web → port 80, api → port 3000.
+#   DEMO_API_URL   public URL of the API, e.g. https://api-demo.outpassed.studentalumni.ai
+#   DEMO_WEB_URL   public URL of the site, e.g. https://demo.outpassed.studentalumni.ai
+#   JWT_SECRET     any random string, 32+ characters
+#   QR_SECRET      another random string, 32+ characters
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: outpassed
+      POSTGRES_PASSWORD: outpassed
+      POSTGRES_DB: outpassed
+    volumes:
+      - demo-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outpassed"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://outpassed:outpassed@db:5432/outpassed
+      NODE_ENV: production
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-demo-only-jwt-secret-change-me-0123456789}
+      QR_SECRET: ${QR_SECRET:-demo-only-qr-secret-change-me-0123456789}
+      CORS_ORIGIN: ${DEMO_WEB_URL:-*}
+      PUBLIC_WEB_URL: ${DEMO_WEB_URL:-http://localhost:8080}
+      CAMPUS_NAME: Sri Venkateswara Institute of Technology (demo)
+      CAMPUS_ADDRESS: NH-16, Guntur, Andhra Pradesh
+      # Demo switches: list the demo accounts on sign-in, reload mock data on every boot.
+      DEMO_ACCOUNTS: "true"
+      SEED_DEMO: "true"
+      # No WhatsApp or SMS on the demo: sign in with email + password.
+      WHATSAPP_MODE: "off"
+      RATE_LIMIT: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        EXPO_PUBLIC_API_URL: ${DEMO_API_URL:-http://localhost:3000}
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  demo-db:

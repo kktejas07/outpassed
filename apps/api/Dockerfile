@@ -39,5 +39,6 @@ COPY --from=build /app /app
 RUN chown -R node:node /app
 USER node
 EXPOSE 3000
-# Apply pending migrations, then start. `migrate deploy` is safe to run on every boot.
-CMD ["sh", "-c", "pnpm --filter @outpassed/api exec prisma migrate deploy && node apps/api/dist/index.js"]
+# Apply pending migrations (safe on every boot), load demo data on demo
+# servers (SEED_DEMO + DEMO_ACCOUNTS), then start.
+CMD ["sh", "apps/api/scripts/start.sh"]

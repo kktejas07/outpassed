@@ -88,7 +88,8 @@ Re-running it resets the demo activity.
 
 On a demo or staging server, set `DEMO_ACCOUNTS=true` on the API and the
 sign-in screen lists these accounts so testers sign in with one tap (web and
-mobile). Never set it for a real college.
+mobile). Never set it for a real college. A ready-made demo stack is in
+`docker-compose.demo.yml`; see [`docs/demo-server.md`](docs/demo-server.md).
 
 ## How it works
 
