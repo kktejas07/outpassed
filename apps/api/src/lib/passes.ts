@@ -7,7 +7,8 @@ import { campusOffsetMinutes, signPass } from "./passKeys";
 const sec = (d: Date) => Math.floor(d.getTime() / 1000);
 
 /** "Block C · Room 214 · 21CS104" */
-export function studentDetail(profile: { hostel: string | null; room: string | null; rollNo: string | null } | null | undefined): string {
+export function studentDetail(profile: { hostel: string | null; room: string | null; rollNo: string | null; residence?: string } | null | undefined): string {
+  if (profile?.residence === "DAY_SCHOLAR") return ["Day scholar", profile.rollNo].filter(Boolean).join(" · ");
   return [profile?.hostel, profile?.room ? `Room ${profile.room}` : null, profile?.rollNo].filter(Boolean).join(" · ") || "Student";
 }
 

@@ -117,8 +117,10 @@ const targetSchema = z
     hostelId: z.uuid().optional(),
     departmentId: z.uuid().optional(),
     allStudents: z.boolean().optional(),
+    /** Every hosteller, or every day scholar (e.g. hostel fee vs bus fee). */
+    residence: z.enum(["HOSTELLER", "DAY_SCHOLAR"]).optional(),
   })
-  .refine((t) => [t.studentIds?.length, t.hostelId, t.departmentId, t.allStudents].filter(Boolean).length === 1, { message: "Choose who the fee is for" });
+  .refine((t) => [t.studentIds?.length, t.hostelId, t.departmentId, t.allStudents, t.residence].filter(Boolean).length === 1, { message: "Choose who the fee is for" });
 
 /**
  * Fees and dues: the office assigns them; students pay online, or upload a
@@ -253,6 +255,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
           ...(t.studentIds ? { id: { in: t.studentIds } } : {}),
           ...(t.hostelId ? { student: { hostelId: t.hostelId } } : {}),
           ...(t.departmentId ? { student: { departmentId: t.departmentId } } : {}),
+          ...(t.residence ? { student: { residence: t.residence } } : {}),
         },
         select: { id: true },
       });

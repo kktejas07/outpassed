@@ -65,10 +65,20 @@ export function initialStatus(opts: {
   hasGuardian: boolean;
   adultParentMode: AdultParentMode;
   now: Date;
-  /** Set when the student named the faculty member who gave permission. */
+  /**
+   * Set when the student named the faculty member who gave permission. For a
+   * day scholar who named nobody, the caller passes their HOD here.
+   */
   facultyId?: string | null;
   type?: string;
+  /** Day scholars have no warden: faculty or HOD approves and the parent is told. */
+  dayScholar?: boolean;
 }): OutpassStatus {
+  if (opts.dayScholar) {
+    // Emergencies too go to the faculty member or HOD (the warden isn't theirs);
+    // with neither on record, an admin decides.
+    return opts.facultyId ? "PENDING_FACULTY" : "PENDING_WARDEN";
+  }
   // Emergencies go straight to the warden; everyone else is told.
   if (opts.type === "EMERGENCY") return "PENDING_WARDEN";
   if (opts.facultyId) return "PENDING_FACULTY";
@@ -76,7 +86,9 @@ export function initialStatus(opts: {
 }
 
 /** Where a pass goes once the faculty step is done (or when there isn't one). */
-export function statusAfterFaculty(opts: { dateOfBirth: Date | null; hasGuardian: boolean; adultParentMode: AdultParentMode; now: Date }): OutpassStatus {
+export function statusAfterFaculty(opts: { dateOfBirth: Date | null; hasGuardian: boolean; adultParentMode: AdultParentMode; now: Date; dayScholar?: boolean }): OutpassStatus {
+  // A day scholar's faculty or HOD approval is final; parents are told, not asked.
+  if (opts.dayScholar) return "APPROVED";
   if (!opts.hasGuardian) return "PENDING_WARDEN";
   const isAdult =
     opts.dateOfBirth !== null && ageOn(opts.dateOfBirth, opts.now) >= ADULT_AGE;

@@ -9,7 +9,7 @@ import { Text } from "./Text";
 
 export type TabDef = { name: string; title: string; icon: keyof typeof Ionicons.glyphMap; iconOn: keyof typeof Ionicons.glyphMap };
 
-/** Floating brand-coloured tab bar; the active tab sits in a white pill with its label. */
+/** Floating brand-coloured tab bar: icon with its name under it; the active icon sits in a white pill. */
 function FloatingBar({ state, descriptors, emitter, navigateToTab, tabs }: BottomTabBarProps & { tabs: TabDef[] }) {
   const insets = useSafeAreaInsets();
   return (
@@ -56,16 +56,15 @@ function TabPill({ focused, icon, label }: { focused: boolean; icon: keyof typeo
     }
   }, [focused, v, hop]);
   return (
-    <View style={styles.pill}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.pillOn, { opacity: v, transform: [{ scaleX: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]} />
-      <Animated.View style={{ transform: [{ translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }}>
-        <Ionicons name={icon} size={21} color={focused ? color.indigoDeep : "rgba(255,255,255,0.78)"} />
-      </Animated.View>
-      {focused ? (
-        <Animated.View style={{ opacity: v, transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }}>
-          <Text style={styles.label} numberOfLines={1}>{label}</Text>
+    <View style={styles.tab}>
+      <View style={styles.pill}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.pillOn, { opacity: v, transform: [{ scaleX: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]} />
+        <Animated.View style={{ transform: [{ translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }] }}>
+          <Ionicons name={icon} size={20} color={focused ? color.indigoDeep : "rgba(255,255,255,0.8)"} />
         </Animated.View>
-      ) : null}
+      </View>
+      {/* Every tab keeps its name under the icon, so no icon has to explain itself. */}
+      <Text style={[styles.label, focused && styles.labelOn]} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -89,7 +88,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: color.indigo,
     borderRadius: radius.pill,
-    padding: 7,
+    paddingVertical: 8, paddingHorizontal: 6,
     shadowColor: "#3730A3",
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -97,7 +96,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   item: { flex: 1, alignItems: "center" },
-  pill: { height: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: radius.pill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  tab: { alignItems: "center", gap: 3, paddingVertical: 2 },
+  pill: { height: 32, width: 52, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   pillOn: { backgroundColor: color.white, borderRadius: radius.pill },
-  label: { fontFamily: font.bodyBold, fontSize: 12.5, color: color.indigoDeep },
+  label: { fontFamily: font.bodySemi, fontSize: 11, color: "rgba(255,255,255,0.78)" },
+  labelOn: { fontFamily: font.bodyBold, color: color.white },
 });

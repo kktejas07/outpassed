@@ -47,6 +47,7 @@ export type NotificationKind =
   | "CONSENT_NEEDED"
   | "CONSENT_CHANGED"
   | "TICKET_NEW"
+  | "OUTPASS_FOR_PARENT_INFO"
   | "TICKET_UPDATE"
   | "EVENT_DECIDED"
   | "EVENT_PENDING"

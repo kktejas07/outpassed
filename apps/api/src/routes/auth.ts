@@ -37,7 +37,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     // A picked hostel wins; typed text is matched to (or creates) a hostel.
     let hostel: { id: string; name: string } | null = null;
-    if (body.role === "STUDENT") {
+    const dayScholar = body.role === "STUDENT" && body.residence === "DAY_SCHOLAR";
+    if (body.role === "STUDENT" && !dayScholar) {
       if (body.hostelId) {
         hostel = await prisma.hostel.findUnique({ where: { id: body.hostelId } });
         if (!hostel) throw new HttpError(404, "HOSTEL_NOT_FOUND", "Hostel not found");
@@ -59,10 +60,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
             ? {
                 create: {
                   rollNo: body.rollNo ?? null,
+                  residence: dayScholar ? "DAY_SCHOLAR" : "HOSTELLER",
                   hostel: hostel?.name ?? null,
                   hostelId: hostel?.id ?? null,
                   departmentId: body.departmentId ?? null,
-                  room: body.room ?? null,
+                  room: dayScholar ? null : (body.room ?? null),
                   dateOfBirth: body.dateOfBirth ? new Date(`${body.dateOfBirth}T00:00:00Z`) : null,
                 },
               }

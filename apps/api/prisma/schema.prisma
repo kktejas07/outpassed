@@ -150,10 +150,13 @@ model StudentProfile {
   hostelRef   Hostel?   @relation(fields: [hostelId], references: [id], onDelete: SetNull)
   room        String?
   dateOfBirth DateTime? @db.Date
+  /// Hostellers live on campus (hostel, room, roll call); day scholars don't.
+  residence   Residence @default(HOSTELLER)
   departmentId String?
   department  Department? @relation("DepartmentStudents", fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([hostelId])
+  @@index([residence])
   @@map("student_profiles")
 }
 
@@ -922,4 +925,9 @@ model OfferDailyStat {
 
   @@id([offerId, day])
   @@map("offer_daily_stats")
+}
+
+enum Residence {
+  HOSTELLER
+  DAY_SCHOLAR
 }
