@@ -39,7 +39,7 @@ export default function StudentHome() {
           : { label: a.status === "PENDING_FACULTY" ? "Waiting for faculty" : a.status === "PENDING_PARENT" ? "Waiting for your parent" : "Waiting for the warden", tone: "warn" };
 
   return (
-    <Screen hero={{ greeting: greeting(), title: user?.name ?? "", chip }} refreshing={vm.refreshing} onRefresh={vm.refresh} bell>
+    <Screen hero={{ greeting: greeting(), title: user?.name ?? "", headline: a ? (a.status === "OUT" ? "You're out.\nBack on time?" : "Your current\noutpass") : "Heading out?\nPlan your outpass", chip }} refreshing={vm.refreshing} onRefresh={vm.refresh} bell>
       {vm.loading ? (
         <Card><Loading /></Card>
       ) : a ? (

@@ -10,7 +10,7 @@ const variants: Record<Variant, TextStyle> = {
   body: { fontFamily: font.body, fontSize: 15, lineHeight: 22, color: color.ink },
   label: { fontFamily: font.bodySemi, fontSize: 13, lineHeight: 18, color: color.ink },
   caption: { fontFamily: font.body, fontSize: 12.5, lineHeight: 17, color: color.muted },
-  eyebrow: { fontFamily: font.bodyBold, fontSize: 11, lineHeight: 14, color: color.muted, letterSpacing: 1.1, textTransform: "uppercase" },
+  eyebrow: { fontFamily: font.bodyBold, fontSize: 12.5, lineHeight: 16, color: color.muted },
 };
 
 export function Text({ variant = "body", style, ...rest }: TextProps & { variant?: Variant }) {

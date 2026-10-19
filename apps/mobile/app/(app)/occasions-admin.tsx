@@ -37,7 +37,7 @@ function Preview({ name, tagline, theme, icon }: { name: string; tagline: string
     <View style={[styles.preview, { backgroundColor: t.bg }]}>
       <View style={[styles.ring, { borderColor: t.ring }]} />
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={[styles.pEyebrow, { color: t.sub }]}>CAMPUS SALE</Text>
+        <Text style={[styles.pEyebrow, { color: t.sub }]}>Campus sale</Text>
         <Text style={styles.pTitle} numberOfLines={2}>{name || "Name of the sale"}</Text>
         <Text style={[styles.pSub, { color: t.sub }]} numberOfLines={2}>{tagline || "One line on what students will find"}</Text>
       </View>

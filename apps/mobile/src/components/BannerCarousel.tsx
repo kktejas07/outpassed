@@ -36,7 +36,7 @@ function Slide({ b, width }: { b: BannerDto; width: number }) {
       <View style={[styles.ring, { borderColor: t.ring, width: 120, height: 120, right: -20, bottom: -60, opacity: 0.5 }]} />
       <View style={styles.row}>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={[styles.eyebrow, { color: t.sub }]} numberOfLines={1}>{eyebrow.toUpperCase()}</Text>
+          <Text style={[styles.eyebrow, { color: t.sub }]} numberOfLines={1}>{eyebrow}</Text>
           <Text style={styles.title} numberOfLines={2}>{b.title}</Text>
           <Text style={[styles.sub, { color: t.sub }]} numberOfLines={2}>{b.subtitle}</Text>
         </View>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   slide: { minHeight: 156, borderRadius: radius.lg, padding: 18, gap: 14, overflow: "hidden", justifyContent: "space-between" },
   ring: { position: "absolute", borderRadius: 999, borderWidth: 18, opacity: 0.35 },
   row: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
-  eyebrow: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 0.8 },
+  eyebrow: { fontFamily: font.bodyBold, fontSize: 12.5 },
   title: { fontFamily: font.display, fontSize: 19, lineHeight: 24, color: "#FFFFFF" },
   sub: { fontFamily: font.body, fontSize: 13, lineHeight: 18 },
   icon: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },

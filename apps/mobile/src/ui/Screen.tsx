@@ -4,37 +4,60 @@ import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSession } from "../auth/session";
 import { color, font, radius } from "../theme/tokens";
+import { Avatar } from "./bits";
 import { Bell } from "./Bell";
-import { Mark } from "./Mark";
 import { Text } from "./Text";
 
 export type Hero = {
-  /** Small line above the name, e.g. "Good morning,". */
+  /** Small line next to the avatar, e.g. "Good morning,". */
   greeting: string;
-  /** Large line, e.g. the person's name or the screen's purpose. */
+  /** The person's name or the place, e.g. "Asha Rao" or "Main Gate". */
   title: string;
+  /**
+   * The big title under the header row. Put a line break in it for the
+   * two-tone look: the first line in ink, the second in the brand colour,
+   * e.g. "Plan your\nnext outpass". Falls back to `title` when it isn't the
+   * person's own name.
+   */
+  headline?: string;
   /** Status chip under the title, e.g. "On campus · Block C, 214". */
   chip?: { label: string; tone?: "safe" | "warn" | "danger" | "info" };
 };
 
-const CHIP_DOT = { safe: color.accentLight, warn: "#FBBF24", danger: "#F87171", info: color.headSub } as const;
+const CHIP = {
+  safe: { dot: color.accentLight, bg: color.accentSoft, fg: color.accentText },
+  warn: { dot: "#F59E0B", bg: color.amberSoft, fg: color.amber },
+  danger: { dot: color.red, bg: color.redSoft, fg: color.red },
+  info: { dot: color.indigo, bg: color.indigoTint, fg: color.indigoDeep },
+} as const;
 
-/** Soft rings in the header band, as in the design. Purely decorative. */
-function Rings({ big }: { big?: boolean }) {
-  const s = big ? 300 : 190;
+/** Round outlined button used for Back (and matched by the alerts bell). */
+function CircleButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <View style={[styles.ring, { width: s, height: s, borderRadius: s / 2, top: big ? -90 : -80, right: big ? -110 : -70 }]} />
-      <View style={[styles.ringDash, { width: s * 0.72, height: s * 0.72, borderRadius: s * 0.36, top: big ? -46 : -52, right: big ? -64 : -40 }]} />
-    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={10} onPress={onPress} style={styles.circle}>
+      <Ionicons name={icon} size={20} color={color.ink} />
+    </Pressable>
+  );
+}
+
+/** Big title; a "\n" splits it into an ink line and a brand-coloured line. */
+function Headline({ text }: { text: string }) {
+  const [first, ...rest] = text.split("\n");
+  return (
+    <Text style={styles.headline} accessibilityRole="header">
+      {first}
+      {rest.length ? <Text style={[styles.headline, { color: color.indigo }]}>{`\n${rest.join(" ")}`}</Text> : null}
+    </Text>
   );
 }
 
 /**
- * Page shell. Detail screens get a compact indigo header band; home screens
- * pass `hero` for the tall band with greeting and status chip, which scrolls
- * with the page while the first card overlaps it.
+ * Page shell, white and quiet so the one bold brand card on each screen
+ * stands out. Home screens pass `hero`: avatar, greeting, bell, then a big
+ * two-tone title and a status chip. Detail screens get a compact header with
+ * a round Back button.
  */
 export function Screen({
   title,
@@ -63,38 +86,30 @@ export function Screen({
   hero?: Hero;
 }) {
   const insets = useSafeAreaInsets();
-  const backButton = back ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Back"
-      hitSlop={10}
-      onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-      style={styles.back}
-    >
-      <Ionicons name="chevron-back" size={22} color={color.white} />
-    </Pressable>
-  ) : null;
+  const { user } = useSession();
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
+  const backButton = back ? <CircleButton icon="chevron-back" label="Back" onPress={goBack} /> : null;
 
-  const heroBand = hero ? (
+  const isName = !!hero && !!user && hero.title === user.name;
+  const headline = hero ? hero.headline ?? (isName ? null : hero.title) : null;
+
+  const heroBlock = hero ? (
     <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
-      <Rings big />
       <View style={styles.headerRow}>
         {backButton}
-        <View style={styles.brand}>
-          <Mark size={34} />
-          <Text style={styles.brandText}>outpass</Text>
+        {user ? <Avatar name={user.name} size={44} photoUrl={user.photoUrl} /> : null}
+        <View style={{ flex: 1 }}>
+          <Text variant="caption" numberOfLines={1}>{hero.greeting.replace(/,$/, "")}</Text>
+          <Text style={styles.who} numberOfLines={1}>{isName || !user ? hero.title : user.name}</Text>
         </View>
         {right}
         {bell ? <Bell /> : null}
       </View>
-      <View style={{ gap: 4, marginTop: 22 }}>
-        <Text style={styles.greeting}>{hero.greeting}</Text>
-        <Text style={styles.heroTitle} numberOfLines={2}>{hero.title}</Text>
-      </View>
+      {headline ? <Headline text={headline} /> : null}
       {hero.chip ? (
-        <View style={styles.chip}>
-          <View style={[styles.chipDot, { backgroundColor: CHIP_DOT[hero.chip.tone ?? "safe"] }]} />
-          <Text style={styles.chipText} numberOfLines={1}>{hero.chip.label}</Text>
+        <View style={[styles.chip, { backgroundColor: CHIP[hero.chip.tone ?? "safe"].bg }]}>
+          <View style={[styles.chipDot, { backgroundColor: CHIP[hero.chip.tone ?? "safe"].dot }]} />
+          <Text style={[styles.chipText, { color: CHIP[hero.chip.tone ?? "safe"].fg }]} numberOfLines={1}>{hero.chip.label}</Text>
         </View>
       ) : null}
     </View>
@@ -102,12 +117,11 @@ export function Screen({
 
   const header = !hero && title ? (
     <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-      <Rings />
       <View style={styles.headerRow}>
         {backButton}
         <View style={{ flex: 1 }}>
-          {eyebrow ? <Text variant="eyebrow" style={{ color: color.headSub }}>{eyebrow}</Text> : null}
-          <Text variant="title" numberOfLines={1} style={{ color: color.white }}>{title}</Text>
+          {eyebrow ? <Text variant="caption" numberOfLines={1}>{eyebrow}</Text> : null}
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
         </View>
         {right}
         {bell ? <Bell /> : null}
@@ -117,28 +131,28 @@ export function Screen({
     <View style={{ height: insets.top }} />
   ) : null;
 
-  const content = <View style={[styles.content, hero && styles.overlap]}>{children}</View>;
+  const content = <View style={styles.content}>{children}</View>;
 
   const body = scroll ? (
     <ScrollView
       contentContainerStyle={{ paddingBottom: footer ? 24 : insets.bottom + 32 }}
       keyboardShouldPersistTaps="handled"
-      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={hero ? color.white : color.indigo} /> : undefined}
+      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={color.indigo} /> : undefined}
     >
-      {heroBand}
+      {heroBlock}
       {content}
     </ScrollView>
   ) : (
     <View style={{ flex: 1 }}>
-      {heroBand}
+      {heroBlock}
       {content}
     </View>
   );
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <StatusBar style={title || hero ? "light" : "dark"} />
-      {hero ? <View style={{ height: 0 }} /> : header}
+      <StatusBar style="dark" />
+      {hero ? null : header}
       {body}
       {footer ? <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>{footer}</View> : null}
     </KeyboardAvoidingView>
@@ -147,20 +161,16 @@ export function Screen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.ground },
-  header: { backgroundColor: color.head, paddingHorizontal: 20, paddingBottom: 18, overflow: "hidden" },
-  hero: { backgroundColor: color.head, paddingHorizontal: 22, paddingBottom: 74, overflow: "hidden" },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brand: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
-  brandText: { fontFamily: font.display, fontSize: 21, color: color.white, letterSpacing: -0.4 },
-  greeting: { fontFamily: font.body, fontSize: 16, color: color.headSub },
-  heroTitle: { fontFamily: font.display, fontSize: 31, lineHeight: 37, color: color.white, letterSpacing: -0.6 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", marginTop: 16, paddingHorizontal: 14, height: 36, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  header: { backgroundColor: color.ground, paddingHorizontal: 20, paddingBottom: 6 },
+  hero: { paddingHorizontal: 20, paddingBottom: 4, gap: 14 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  who: { fontFamily: font.display, fontSize: 17, color: color.ink, letterSpacing: -0.2 },
+  title: { fontFamily: font.display, fontSize: 21, color: color.ink, letterSpacing: -0.3 },
+  headline: { fontFamily: font.display, fontSize: 30, lineHeight: 36, color: color.ink, letterSpacing: -0.7 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", paddingHorizontal: 14, height: 34, borderRadius: radius.pill },
   chipDot: { width: 8, height: 8, borderRadius: 4 },
-  chipText: { fontFamily: font.bodyBold, fontSize: 14, color: color.white },
-  ring: { position: "absolute", backgroundColor: "rgba(99,102,241,0.14)" },
-  ringDash: { position: "absolute", borderWidth: 1.5, borderStyle: "dashed", borderColor: "rgba(165,180,252,0.35)" },
-  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
-  content: { padding: 20, gap: 14 },
-  overlap: { marginTop: -56, paddingTop: 0 },
+  chipText: { fontFamily: font.bodyBold, fontSize: 13.5 },
+  circle: { width: 42, height: 42, borderRadius: 21, backgroundColor: color.white, borderWidth: 1, borderColor: color.line, alignItems: "center", justifyContent: "center" },
+  content: { padding: 20, paddingTop: 14, gap: 14 },
   footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: color.white, borderTopWidth: 1, borderTopColor: color.line, gap: 10 },
 });

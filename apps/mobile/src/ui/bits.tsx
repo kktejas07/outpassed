@@ -44,6 +44,38 @@ export function Avatar({ name, size = 40, tone = "indigo", photoUrl }: { name: s
   );
 }
 
+/**
+ * Overlapping faces of the people involved (approvers, hosts), as in the
+ * design. Extra people collapse into a "+N" bubble.
+ */
+export function AvatarStack({ people, size = 30, max = 4, ring = color.white }: { people: { name: string; photoUrl?: string | null }[]; size?: number; max?: number; ring?: string }) {
+  const shown = people.slice(0, max);
+  const more = people.length - shown.length;
+  return (
+    <View style={{ flexDirection: "row" }} accessibilityLabel={people.map((p) => p.name).join(", ")}>
+      {shown.map((p, i) => (
+        <View key={`${p.name}-${i}`} style={{ marginLeft: i ? -size * 0.32 : 0, borderRadius: size, borderWidth: 2, borderColor: ring }}>
+          <Avatar name={p.name} size={size} photoUrl={p.photoUrl} />
+        </View>
+      ))}
+      {more > 0 ? (
+        <View style={{ marginLeft: -size * 0.32, width: size + 4, height: size + 4, borderRadius: size, borderWidth: 2, borderColor: ring, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontFamily: font.bodyBold, fontSize: size * 0.36, color: color.white }}>+{more}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The round arrow on tappable cards. `inverse` for use on a brand-coloured card. */
+export function ArrowCircle({ inverse, size = 34 }: { inverse?: boolean; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center", backgroundColor: inverse ? color.white : color.ground, borderWidth: inverse ? 0 : 1, borderColor: color.line }}>
+      <Ionicons name="chevron-forward" size={size * 0.5} color={inverse ? color.indigoDeep : color.ink} />
+    </View>
+  );
+}
+
 export function Segmented<T extends string>({
   options,
   value,
@@ -65,7 +97,7 @@ export function Segmented<T extends string>({
             onPress={() => onChange(o.value)}
             style={[styles.segItem, on && styles.segOn]}
           >
-            <Text style={[styles.segText, on && { color: color.ink }]}>{o.label}</Text>
+            <Text style={[styles.segText, on && { color: color.white }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -94,8 +126,8 @@ export function Chips<T extends string>({
             onPress={() => onChange(o.value)}
             style={[styles.chip, on && styles.chipOn]}
           >
-            {o.icon ? <Ionicons name={o.icon} size={15} color={on ? color.accentText : color.muted} /> : null}
-            <Text style={[styles.chipText, on && { color: color.accentText }]}>{o.label}</Text>
+            {o.icon ? <Ionicons name={o.icon} size={15} color={on ? color.white : color.muted} /> : null}
+            <Text style={[styles.chipText, on && { color: color.white }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -137,7 +169,7 @@ export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () 
 export function SectionTitle({ title, action }: { title: string; action?: { label: string; onPress: () => void } }) {
   return (
     <View style={styles.section}>
-      <Text variant="eyebrow">{title}</Text>
+      <Text style={styles.sectionTitle}>{title}</Text>
       {action ? (
         <Pressable onPress={action.onPress} hitSlop={8}>
           <Text variant="label" style={{ color: color.indigo }}>{action.label}</Text>
@@ -175,19 +207,20 @@ export function KeyValue({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  seg: { flexDirection: "row", backgroundColor: "#F1F0F7", borderRadius: radius.md, padding: 4 },
-  segItem: { flex: 1, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 10 },
-  segOn: { backgroundColor: color.white, shadowColor: "#1E1B4B", shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  seg: { flexDirection: "row", backgroundColor: color.white, borderRadius: radius.pill, padding: 4, borderWidth: 1, borderColor: color.line },
+  segItem: { flex: 1, height: 38, alignItems: "center", justifyContent: "center", borderRadius: radius.pill },
+  segOn: { backgroundColor: color.indigo },
   segText: { fontFamily: font.bodyBold, fontSize: 13.5, color: color.muted },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: color.line, backgroundColor: color.white },
-  chipOn: { borderColor: color.accentFrame, backgroundColor: color.accentSoft },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, borderColor: color.line, backgroundColor: color.white },
+  chipOn: { borderColor: color.indigo, backgroundColor: color.indigo },
   chipText: { fontFamily: font.bodySemi, fontSize: 13.5, color: color.muted },
   empty: { alignItems: "center", gap: 8, paddingVertical: 40 },
   emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: color.accentSoft, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   error: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: color.redSoft },
-  section: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
-  stat: { flex: 1, minWidth: 140, backgroundColor: color.white, borderRadius: radius.lg, borderWidth: 1, borderColor: color.line, padding: 14, gap: 4 },
+  section: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  sectionTitle: { fontFamily: font.display, fontSize: 17, color: color.ink, letterSpacing: -0.2 },
+  stat: { flex: 1, minWidth: 140, backgroundColor: color.white, borderRadius: radius.lg, padding: 14, gap: 4, shadowColor: "#1E1B4B", shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 1 },
   statIcon: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   kv: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: color.line },
 });

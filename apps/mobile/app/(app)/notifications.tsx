@@ -40,7 +40,7 @@ export default function Inbox() {
       right={
         vm.unread ? (
           <Pressable onPress={vm.markAllRead} hitSlop={8} accessibilityRole="button">
-            <Text variant="label" style={{ color: color.headSub }}>Mark all read</Text>
+            <Text variant="label" style={{ color: color.indigo }}>Mark all read</Text>
           </Pressable>
         ) : undefined
       }

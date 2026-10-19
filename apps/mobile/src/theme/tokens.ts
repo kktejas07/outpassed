@@ -5,7 +5,8 @@
  */
 export const color = {
   white: "#FFFFFF",
-  ground: "#F5F6FB",
+  /** Page background: near-white so white cards read as raised. */
+  ground: "#F6F6FA",
   line: "#E4E6F0",
   ink: "#12113A",
   muted: "#5B5F7A",
@@ -48,15 +49,15 @@ export const font = {
 } as const;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
-export const radius = { sm: 12, md: 16, lg: 22, pill: 999 } as const;
+export const radius = { sm: 14, md: 18, lg: 24, pill: 999 } as const;
 
 export const shadow = {
   card: {
     shadowColor: "#1E1B4B",
-    shadowOpacity: 0.07,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
   },
   primary: {
     shadowColor: "#4338CA",
