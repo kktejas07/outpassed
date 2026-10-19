@@ -27,3 +27,7 @@ apps/api/prisma/*.db
 *.log
 npm-debug.log*
 .DS_Store
+
+# Screen checks
+e2e-shots/
+dist-web/

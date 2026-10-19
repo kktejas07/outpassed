@@ -49,7 +49,7 @@ export function verifyPhotoSig(userId: string, exp: number, v: number, given: st
 }
 
 /** Signed link for other stored images (fee proofs, marketplace photos). */
-export function mediaUrl(kind: "fee-proof" | "market", id: string, version = 0, now = Date.now()): string {
+export function mediaUrl(kind: "fee-proof" | "market" | "receipt" | "ticket", id: string, version = 0, now = Date.now()): string {
   const exp = Math.ceil((now / 1000 + TTL_SECONDS) / 3600) * 3600;
   return `/media/${kind}/${id}?v=${version}&exp=${exp}&sig=${sig(`${kind}:${id}`, exp, version)}`;
 }

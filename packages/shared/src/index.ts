@@ -31,6 +31,8 @@ export const registerSchema = z.object({
   role: selfRegisterRoleSchema.default("STUDENT"),
   // Student-only profile fields.
   rollNo: z.string().trim().max(40).optional(),
+  /** Students: do they live in the hostel? Day scholars skip hostel and room. */
+  residence: z.enum(["HOSTELLER", "DAY_SCHOLAR"]).optional(),
   hostel: z.string().trim().max(80).optional(),
   /** Pick from GET /hostels; takes precedence over the free-text `hostel`. */
   hostelId: uuidSchema.optional(),
@@ -51,6 +53,8 @@ export const studentProfileSchema = z.object({
   hostelId: z.string().nullable(),
   room: z.string().nullable(),
   dateOfBirth: z.string().nullable(),
+  /** HOSTELLER lives on campus; DAY_SCHOLAR comes in for the day (no hostel, roll call or helpdesk). */
+  residence: z.enum(["HOSTELLER", "DAY_SCHOLAR"]).default("HOSTELLER"),
 });
 
 export const userSchema = z.object({
@@ -224,6 +228,7 @@ export const outpassSchema = z.object({
     room: z.string().nullable(),
     photoUrl: z.string().nullable(),
     department: z.string().nullable().default(null),
+    residence: z.enum(["HOSTELLER", "DAY_SCHOLAR"]).default("HOSTELLER"),
   }),
   /** Who gave permission (approves first). */
   faculty: z.object({ id: uuidSchema, name: z.string() }).nullable().default(null),
@@ -461,6 +466,8 @@ export const dashboardSummarySchema = z.object({
   visitorsOnSite: z.number().int(),
   movementsToday: z.number().int(),
   openSos: z.number().int(),
+  /** Helpdesk requests not yet fixed. */
+  openTickets: z.number().int().default(0),
   parcelsWaiting: z.number().int(),
   extensionRequests: z.number().int(),
   overdueList: z.array(outpassSchema),

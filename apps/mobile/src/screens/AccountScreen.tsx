@@ -87,7 +87,12 @@ export function AccountScreen() {
           <KeyValue label="Email" value={user.email} />
           {user.phone ? <KeyValue label="Phone" value={user.phone} /> : null}
           {s?.rollNo ? <KeyValue label="Roll number" value={s.rollNo} /> : null}
-          {s?.hostel ? <KeyValue label="Hostel" value={[s.hostel, s.room ? `Room ${s.room}` : null].filter(Boolean).join(" · ")} /> : null}
+          {s ? (
+            <KeyValue
+              label="Stays"
+              value={s.residence === "DAY_SCHOLAR" ? "Day scholar · lives off campus" : ["Hosteller", s.hostel, s.room ? `Room ${s.room}` : null].filter(Boolean).join(" · ")}
+            />
+          ) : null}
         </Card>
       </FadeIn>
       {user.role === "PARENT" ? (

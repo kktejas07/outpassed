@@ -71,6 +71,7 @@ export function toUserDto(user: UserRow): UserDto {
           dateOfBirth: user.student.dateOfBirth
             ? user.student.dateOfBirth.toISOString().slice(0, 10)
             : null,
+          residence: user.student.residence,
         }
       : null,
     photoUrl: photoUrl(user.id, user.photo?.updatedAt),
@@ -111,6 +112,7 @@ export function toOutpassDto(row: OutpassWithRelations, now: Date = new Date()):
       room: row.student.student?.room ?? null,
       photoUrl: photoUrl(row.student.id, row.student.photo?.updatedAt),
       department: row.student.student?.department?.name ?? null,
+      residence: row.student.student?.residence ?? "HOSTELLER",
     },
     faculty: row.faculty,
     approvals: row.approvals.map(

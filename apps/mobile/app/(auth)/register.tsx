@@ -19,6 +19,8 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [rollNo, setRollNo] = useState("");
+  const [residence, setResidence] = useState<"HOSTELLER" | "DAY_SCHOLAR">("HOSTELLER");
+  const day = residence === "DAY_SCHOLAR";
   const [hostel, setHostel] = useState("");
   const [hostelId, setHostelId] = useState("");
   // The college's hostels, when it has set them up; otherwise students type it.
@@ -45,7 +47,9 @@ export default function RegisterScreen() {
         password,
         phone: phone.trim() || undefined,
         ...(role === "STUDENT"
-          ? { rollNo: rollNo.trim() || undefined, hostelId: hostelId || undefined, hostel: hostelId ? undefined : hostel.trim() || undefined, room: room.trim() || undefined, dateOfBirth: dob || undefined }
+          ? day
+            ? { rollNo: rollNo.trim() || undefined, residence, dateOfBirth: dob || undefined }
+            : { rollNo: rollNo.trim() || undefined, residence, hostelId: hostelId || undefined, hostel: hostelId ? undefined : hostel.trim() || undefined, room: room.trim() || undefined, dateOfBirth: dob || undefined }
           : {}),
       });
     } catch (err) {
@@ -68,9 +72,19 @@ export default function RegisterScreen() {
       </FadeIn>
       {role === "STUDENT" ? (
         <FadeIn index={2} style={{ gap: 14 }}>
-          <Text variant="eyebrow" style={{ marginTop: 4 }}>Hostel details</Text>
+          <Text variant="eyebrow" style={{ marginTop: 4 }}>College details</Text>
           <Field label="Roll number" value={rollNo} onChangeText={setRollNo} autoCapitalize="characters" placeholder="e.g. 21CS104" />
-          {hostels.length ? (
+          <View style={{ gap: 6 }}>
+            <Text variant="label">Where do you stay?</Text>
+            <Segmented options={[{ value: "HOSTELLER", label: "In the hostel" }, { value: "DAY_SCHOLAR", label: "At home (day scholar)" }]} value={residence} onChange={setResidence} />
+          </View>
+          {day ? (
+            <View style={styles.note}>
+              <Text variant="caption" style={{ color: color.ink }}>
+                Day scholars' outpasses are approved by the faculty who gave permission, or your HOD. Your parent is told; there's no warden step.
+              </Text>
+            </View>
+          ) : hostels.length ? (
             <>
               <View style={{ gap: 6 }}>
                 <Text variant="label">Hostel</Text>

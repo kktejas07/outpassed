@@ -232,6 +232,20 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
   The office can also mark counter payments or waive a fee.
 - Reminders go out 3 days before, on the due day, then weekly while overdue
   (parents are included once it's overdue).
+- **Part-payments:** the office can let a fee be paid in parts ("Allow paying
+  in parts" when assigning it). Students then choose how much to pay now,
+  online or by proof; the office can always take part of a fee at the counter.
+- **Receipts:** every accepted payment gets a number (OP-001001 onwards) and a
+  one-page PDF receipt, opened from the fee card.
+
+**Hostel helpdesk**
+
+- Students report a problem (water, electricity, Wi-Fi, room repair, cleaning,
+  mess, furniture) with an optional photo. The wardens of their hostel are told.
+- The warden picks it up ("Start fixing"), adds notes and marks it fixed with
+  a note; the student confirms it's fixed or reopens it within a week. Every
+  step is in the request's history and sent to the other side.
+- Open requests show as a badge on the warden's and admin's Campus screen.
 
 **Campus tab: events, buy & sell, offers**
 
@@ -247,6 +261,9 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
   sale (Diwali, exam season, freshers' move-in) with a colour, icon and dates;
   it gets its own page, students can list items for it, and offers can be
   tagged to it. Under-18s see the student listings but not sponsored offers.
+- **Sponsor report:** People → Offers shows taps per offer for this month and
+  the two before, with a CSV to send partners. Taps are counted per day in
+  total; nobody's name is recorded.
 - **Offers & opportunities:** sponsored listings the admin adds (coding tests,
   courses and training, internships, food near campus, coupons). Every student
   sees the same list: nothing is targeted and only total taps are counted. They
@@ -277,6 +294,22 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
   involved. Teal marks allowed and safe states, red denied and overdue. Sora
   and Manrope type. A ribbon slides in after each action; big moments also
   drop confetti.
+
+**Reliability**
+
+- **Gate photos offline:** photos waiting to upload are saved on the guard's
+  phone (files on iOS/Android, browser storage on the web), so closing the app
+  before the signal returns doesn't lose them.
+- **Crash reporting:** set `SENTRY_DSN` on the API to send server errors and
+  app crashes to Sentry. The apps report crashes to `POST /client-errors`, so
+  no native add-on is needed. A crashed screen shows "Try again" instead of a
+  blank page.
+- **Photo bucket:** set `S3_BUCKET` (plus `S3_ENDPOINT` and keys for R2 or
+  MinIO) to keep photos and payment proofs in a bucket instead of Postgres.
+  Older photos stay readable from the database, so it can be switched on later.
+- **Screen checks in CI:** the `screens` job loads the demo data, builds the
+  web app and signs in as every role in a real browser (`e2e/smoke.mjs`).
+  Screenshots are kept as a build artifact.
 
 ## API
 

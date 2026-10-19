@@ -2,6 +2,7 @@ import { useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Pressable, StyleSheet, Switch, View } from "react-native";
 import { campus, errorMessage } from "../../src/api/client";
+import { OfferReportCard } from "../../src/components/OfferReportCard";
 import { useSession } from "../../src/auth/session";
 import { useQuery } from "../../src/lib/useQuery";
 import { color, font, radius, shadow } from "../../src/theme/tokens";
@@ -76,6 +77,7 @@ export default function OffersAdmin() {
           <Button icon="checkmark" label="Add offer" loading={busy} disabled={!valid} onPress={add} />
         </PopIn>
       ) : null}
+      {!adding ? <OfferReportCard /> : null}
       {q.loading ? <Loading rows={2} /> : null}
       {q.data && q.data.offers.length === 0 ? <Empty icon="gift-outline" title="No offers yet" /> : null}
       {q.data?.offers.length ? <SectionTitle title={`${q.data.offers.filter((o) => o.active).length} live`} /> : null}

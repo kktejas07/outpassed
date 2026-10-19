@@ -3,6 +3,7 @@ import { env } from "./env";
 import { startOverdueSweeper } from "./lib/overdue";
 import { startFeeReminders } from "./lib/feeReminders";
 import { startPhotoPurge } from "./lib/photoRetention";
+import { initErrorReporting } from "./lib/errors";
 import { prisma } from "./lib/prisma";
 
 let sweeper: ReturnType<typeof setInterval> | undefined;
@@ -10,6 +11,7 @@ let feeTimer: ReturnType<typeof setInterval> | undefined;
 let photoTimer: ReturnType<typeof setInterval> | undefined;
 
 async function main(): Promise<void> {
+  initErrorReporting();
   const app = await buildApp();
 
   const shutdown = async (signal: string): Promise<void> => {

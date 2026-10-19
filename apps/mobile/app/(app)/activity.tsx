@@ -18,7 +18,7 @@ const ICON: Record<string, { icon: keyof typeof Ionicons.glyphMap; tone: string 
   OUTPASS_OVERRIDE: { icon: "flash", tone: color.amber },
   EXTENSION_APPROVED: { icon: "time", tone: color.green },
   EXTENSION_REJECTED: { icon: "time", tone: color.red },
-  ROLLCALL_CLOSED: { icon: "moon", tone: color.indigo },
+  ROLLCALL_CLOSED: { icon: "clipboard", tone: color.indigo },
   ROLLCALL_CORRECTED: { icon: "create", tone: color.amber },
   SOS_ACKNOWLEDGED: { icon: "alert-circle", tone: color.red },
   SOS_RESOLVED: { icon: "shield-checkmark", tone: color.green },

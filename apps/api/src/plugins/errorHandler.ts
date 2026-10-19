@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { FlowError } from "../domain/outpassFlow";
+import { reportServerError } from "../lib/errors";
 
 /** Error with a stable machine-readable code, rendered by the error handler. */
 export class HttpError extends Error {
@@ -20,7 +21,7 @@ function isFastifyJwtError(error: unknown): boolean {
 }
 
 export function registerErrorHandler(app: FastifyInstance): void {
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
       return reply.status(400).send({
         error: {
@@ -64,6 +65,8 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     app.log.error(error);
+    const who = (request as { user?: { sub?: string; role?: string } }).user;
+    reportServerError(error, { method: request.method, url: request.url, user: who ? { id: who.sub, role: who.role } : undefined });
     return reply
       .status(500)
       .send({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });

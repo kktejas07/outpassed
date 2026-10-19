@@ -14,10 +14,13 @@ export async function sendFeeReminders(now = new Date()): Promise<number> {
   const today = new Date(now.toISOString().slice(0, 10));
   const fees = await prisma.fee.findMany({
     where: { status: "DUE", dueDate: { lte: new Date(today.getTime() + 3 * DAY) } },
+    include: { payments: { where: { status: "VERIFIED" }, select: { amountPaise: true } } },
     take: 2000,
   });
   let sent = 0;
   for (const f of fees) {
+    // What's still owed, after any part-payments.
+    const owed = f.amountPaise - f.payments.reduce((n, p) => n + p.amountPaise, 0);
     const daysLeft = Math.round((f.dueDate.getTime() - today.getTime()) / DAY);
     let stage = f.remindStage;
     let title: string | null = null;
@@ -26,15 +29,15 @@ export async function sendFeeReminders(now = new Date()): Promise<number> {
     if (daysLeft > 0 && stage < 1) {
       stage = 1;
       title = `${f.title} due in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
-      body = `${rupees(f.amountPaise)} by ${fmt(f.dueDate)}. Pay in the app or at the office.`;
+      body = `${rupees(owed)} by ${fmt(f.dueDate)}. Pay in the app or at the office.`;
     } else if (daysLeft === 0 && stage < 2) {
       stage = 2;
       title = `${f.title} is due today`;
-      body = `${rupees(f.amountPaise)}. Pay in the app or at the office.`;
+      body = `${rupees(owed)}. Pay in the app or at the office.`;
     } else if (daysLeft < 0 && (!f.lastRemindedAt || now.getTime() - f.lastRemindedAt.getTime() >= 7 * DAY || stage < 3)) {
       stage = Math.max(3, stage + 1);
       title = `${FEE_LABEL[f.category]} overdue: ${f.title}`;
-      body = `${rupees(f.amountPaise)} was due ${fmt(f.dueDate)}. Please pay as soon as you can, or tell the office if there's a problem.`;
+      body = `${rupees(owed)} was due ${fmt(f.dueDate)}. Please pay as soon as you can, or tell the office if there's a problem.`;
       parents = true;
     }
     if (!title) continue;

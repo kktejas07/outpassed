@@ -1,7 +1,7 @@
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createStaffSchema, importSchema, linkGuardianSchema, roleSchema, type GuardianshipDto } from "@outpassed/shared";
+import { createStaffSchema, idParamSchema, importSchema, linkGuardianSchema, roleSchema, type GuardianshipDto } from "@outpassed/shared";
 import { importStudents } from "../lib/importStudents";
 import { phoneFields } from "../lib/phone";
 import { audit } from "../lib/audit";
@@ -77,6 +77,27 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** Bulk-adds students and parents from a CSV. Preview with dryRun first. */
+  /** Hosteller or day scholar. Making someone a day scholar clears their hostel and room. */
+  app.put("/admin/users/:id/residence", async (request) => {
+    requireRole(request, "ADMIN");
+    const { id } = idParamSchema.parse(request.params);
+    const body = z.object({ residence: z.enum(["HOSTELLER", "DAY_SCHOLAR"]), hostelId: z.uuid().optional(), room: z.string().trim().max(20).optional() }).parse(request.body);
+    const profile = await prisma.studentProfile.findUnique({ where: { userId: id }, include: { user: { select: { name: true } } } });
+    if (!profile) throw new HttpError(404, "NOT_FOUND", "Student not found");
+    const hostel = body.hostelId ? await prisma.hostel.findUnique({ where: { id: body.hostelId } }) : null;
+    if (body.hostelId && !hostel) throw new HttpError(404, "HOSTEL_NOT_FOUND", "Hostel not found");
+    await prisma.studentProfile.update({
+      where: { userId: id },
+      data:
+        body.residence === "DAY_SCHOLAR"
+          ? { residence: "DAY_SCHOLAR", hostel: null, hostelId: null, room: null }
+          : { residence: "HOSTELLER", ...(hostel ? { hostel: hostel.name, hostelId: hostel.id } : {}), ...(body.room ? { room: body.room } : {}) },
+    });
+    await audit(request, "RESIDENCE_CHANGED", `${profile.user.name} is now a ${body.residence === "DAY_SCHOLAR" ? "day scholar" : `hosteller${hostel ? ` in ${hostel.name}` : ""}`}`, { type: "user", id });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id }, include: userInclude });
+    return toUserDto(user);
+  });
+
   app.post("/admin/import/students", { bodyLimit: 3 * 1024 * 1024 }, async (request) => {
     const body = importSchema.parse(request.body);
     try {

@@ -27,6 +27,8 @@ import { departmentRoutes } from "./routes/departments";
 import { feeRoutes } from "./routes/fees";
 import { campusRoutes } from "./routes/campus";
 import { consentRoutes } from "./routes/consent";
+import { clientErrorRoutes } from "./routes/clientErrors";
+import { helpdeskRoutes } from "./routes/helpdesk";
 import { reportRoutes } from "./routes/reports";
 
 /** Builds the Fastify instance. Kept separate from listen() so tests can inject. */
@@ -89,6 +91,8 @@ export async function buildApp(opts: { rateLimit?: boolean } = {}): Promise<Fast
   await app.register(hostelRoutes);
   await app.register(photoRoutes);
   await app.register(setupRoutes);
+  await app.register(clientErrorRoutes);
+  await app.register(helpdeskRoutes);
   await app.register(rollCallRoutes);
   await app.register(departmentRoutes);
   await app.register(feeRoutes);
@@ -111,5 +115,6 @@ const LIMITS: Record<string, { max: number; timeWindow: string }> = {
   "/setup": { max: 10, timeWindow: "1 minute" },
   "/public/visit-pass/:token": { max: 60, timeWindow: "1 minute" },
   "/gate/scan": { max: 120, timeWindow: "1 minute" },
+  "/client-errors": { max: 30, timeWindow: "1 minute" },
   "/gate/lookup": { max: 60, timeWindow: "1 minute" },
 };

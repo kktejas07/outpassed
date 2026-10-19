@@ -8,11 +8,13 @@ import { Card } from "../../../src/ui/Card";
 import { Chips, ErrorNote, KeyValue } from "../../../src/ui/bits";
 import { Field } from "../../../src/ui/Field";
 import { FadeIn, PopIn } from "../../../src/ui/motion";
+import { useSession } from "../../../src/auth/session";
 import { Screen } from "../../../src/ui/Screen";
 import { Text } from "../../../src/ui/Text";
 
 export default function NewOutpass() {
   const vm = useNewOutpass();
+  const day = useSession().user?.student?.residence === "DAY_SCHOLAR";
   return (
     <Screen
       title="Request outpass"
@@ -26,7 +28,7 @@ export default function NewOutpass() {
         {vm.type === "EMERGENCY" ? (
           <PopIn style={styles.emergency}>
             <Ionicons name="alert-circle" size={18} color={color.red} />
-            <Text variant="caption" style={{ flex: 1, color: color.ink }}>Emergency requests go straight to the warden. Your parents and faculty are told at once.</Text>
+            <Text variant="caption" style={{ flex: 1, color: color.ink }}>{day ? "Emergency requests go straight to your HOD. Your parents are told at once." : "Emergency requests go straight to the warden. Your parents and faculty are told at once."}</Text>
           </PopIn>
         ) : null}
       </FadeIn>
@@ -58,14 +60,16 @@ export default function NewOutpass() {
                   </Pressable>
                 ))}
               </View>
-              <Text variant="caption">Skip this if no one has given you permission yet; the request will go to your parent and warden.</Text>
+              <Text variant="caption">{day
+                  ? "Skip this and your HOD approves it. Your parent is told either way; there's no warden step for day scholars."
+                  : "Skip this if no one has given you permission yet; the request will go to your parent and warden."}</Text>
             </View>
           )}
         </FadeIn>
       ) : null}
       <FadeIn index={1} style={{ gap: 14 }}>
         <Field label="Where are you going?" placeholder="e.g. City Mall, Home – Vijayawada" value={vm.destination} onChangeText={vm.setDestination} error={vm.errors.destination} />
-        <Field label="Reason" placeholder="A short note for your parent and warden" value={vm.reason} onChangeText={vm.setReason} multiline error={vm.errors.reason} />
+        <Field label="Reason" placeholder={day ? "A short note for your faculty" : "A short note for your parent and warden"} value={vm.reason} onChangeText={vm.setReason} multiline error={vm.errors.reason} />
       </FadeIn>
       <FadeIn index={2} style={{ gap: 10 }}>
         <Text variant="eyebrow">Leaving</Text>

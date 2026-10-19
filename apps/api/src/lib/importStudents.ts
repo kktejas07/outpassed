@@ -25,7 +25,17 @@ const ALIASES: Record<string, string> = {
   parentphone: "parentPhone", parentmobile: "parentPhone", guardianphone: "parentPhone", guardianmobile: "parentPhone",
   relation: "relation", relationship: "relation",
   department: "department", dept: "department", branch: "department", course: "department",
+  residence: "residence", type: "residence", studenttype: "residence", hosteller: "residence", dayscholar: "residence", stay: "residence",
 };
+
+/** "Day scholar", "day", "DS", "no" (in a "hosteller" column) → day scholar; "hosteller", "hostel", "yes" → hosteller. */
+function parseResidence(v: string): "HOSTELLER" | "DAY_SCHOLAR" | null {
+  const t = v.trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (!t) return null;
+  if (["dayscholar", "day", "ds", "dayschol", "no", "n", "nonhosteller", "local"].includes(t)) return "DAY_SCHOLAR";
+  if (["hosteller", "hostler", "hostel", "hostelite", "resident", "yes", "y", "h"].includes(t)) return "HOSTELLER";
+  return null;
+}
 
 export const REQUIRED_COLUMNS = ["name", "rollNo"] as const;
 
@@ -33,7 +43,7 @@ const email = z.email();
 
 type Parsed = {
   name: string; rollNo: string; email: string; phone: string; hostel: string; room: string;
-  dateOfBirth: string; parentName: string; parentEmail: string; parentPhone: string; relation: string; department: string;
+  dateOfBirth: string; parentName: string; parentEmail: string; parentPhone: string; relation: string; department: string; residence: string;
 };
 
 /** Accepts 2004-08-21, 21/08/2004 or 21-08-2004. */
@@ -136,8 +146,10 @@ export async function importStudents(csv: string, opts: { dryRun: boolean; sendW
       }
     }
 
+    // A hostel on the row means a hosteller; an explicit "day scholar" wins and clears the hostel.
+    const residence = parseResidence(r.residence ?? "") ?? (r.hostel ? "HOSTELLER" : existing ? null : "DAY_SCHOLAR");
     let hostel: { id: string; name: string } | null = null;
-    if (r.hostel) {
+    if (r.hostel && residence !== "DAY_SCHOLAR") {
       const key = r.hostel.replace(/\s+/g, " ").toLowerCase();
       const known = knownHostels.get(key);
       if (known) hostel = known;
@@ -152,9 +164,11 @@ export async function importStudents(csv: string, opts: { dryRun: boolean; sendW
     if (!opts.dryRun) {
       const dept = r.department ? await ensureDepartment(r.department) : null;
       const profile = {
+        ...(residence ? { residence } : {}),
+        ...(residence === "DAY_SCHOLAR" ? { hostel: null, hostelId: null, room: null } : {}),
         ...(hostel ? { hostel: hostel.name, hostelId: hostel.id } : {}),
         ...(dept ? { departmentId: dept.id } : {}),
-        ...(r.room ? { room: r.room } : {}),
+        ...(r.room && residence !== "DAY_SCHOLAR" ? { room: r.room } : {}),
         ...(dob ? { dateOfBirth: dob } : {}),
       };
       let studentId: string;

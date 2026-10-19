@@ -28,6 +28,18 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Photo bucket (S3, Cloudflare R2, MinIO). Leave S3_BUCKET unset to keep
+   * photos in Postgres, which is fine for a pilot.
+   */
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().default("auto"),
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  /** Crash reporting (sentry.io or self-hosted). Leave unset to turn it off. */
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
   /** Campus time zone, for regular visitor hours and roll-call dates. */
   CAMPUS_TZ: z.string().default("Asia/Kolkata"),
   /** How long one rendered QR code is accepted at the gate. */

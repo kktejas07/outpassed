@@ -11,6 +11,7 @@ import {
 import { env } from "../env";
 import { FlowError } from "../domain/outpassFlow";
 import { visitToken } from "../lib/passes";
+import { storeImage } from "../lib/blobStore";
 import { decodePhoto } from "./photos";
 import { describeRepeat } from "@outpassed/shared/passToken";
 import { prisma } from "../lib/prisma";
@@ -103,6 +104,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     requireRole(request, "GUARD", "ADMIN");
     const body = walkInSchema.parse(request.body);
     const photo = body.photo ? decodePhoto(body.photo) : null;
+    const stored = photo ? await storeImage("visitor", photo) : null;
     const host = await prisma.user.findUnique({ where: { id: body.hostId } });
     if (!host || host.role === "GUARD" || host.role === "PARENT") {
       throw new HttpError(400, "INVALID_HOST", "Choose a valid host");
@@ -117,7 +119,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
         status: "PENDING_HOST",
         walkIn: true,
         visitorIdNumber: body.visitorIdNumber ?? null,
-        ...(photo ? { visitorPhoto: photo.data, visitorPhotoMime: photo.mime } : {}),
+        ...(stored ? { visitorPhoto: stored.data, visitorPhotoKey: stored.key, visitorPhotoMime: photo!.mime } : {}),
         validFrom: now,
         validTo: new Date(now.getTime() + body.durationMinutes * 60_000),
         hostId: host.id,

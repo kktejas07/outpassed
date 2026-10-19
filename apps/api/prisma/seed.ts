@@ -79,6 +79,21 @@ async function main() {
   await prisma.userPhoto.deleteMany({ where: { userId: diyaUser.id } });
   ids.push(diyaUser.id);
 
+  // A day scholar: lives at home, comes by college bus. No hostel, no warden.
+  const meghanaUser = await upsertUser("meghana@outpass.dev", "Meghana Iyer", "STUDENT", "+919800000014");
+  await prisma.studentProfile.upsert({
+    where: { userId: meghanaUser.id },
+    create: { userId: meghanaUser.id, rollNo: "24CS031", residence: "DAY_SCHOLAR" },
+    update: { rollNo: "24CS031", residence: "DAY_SCHOLAR", hostel: null, hostelId: null, room: null },
+  });
+  await prisma.guardianship.upsert({
+    where: { studentId_parentId: { studentId: meghanaUser.id, parentId: parent.id } },
+    create: { studentId: meghanaUser.id, parentId: parent.id, relation: "Guardian", priority: 1 },
+    update: {},
+  });
+  const meghana = meghanaUser.id;
+  ids.push(meghana);
+
   // Reset demo activity so the screens always show a fresh picture.
   await prisma.outpass.deleteMany({ where: { studentId: { in: ids } } });
   await prisma.notification.deleteMany({});
@@ -198,13 +213,34 @@ async function main() {
   await prisma.fee.deleteMany({ where: { studentId: { in: ids } } });
   await prisma.fee.createMany({
     data: [
-      { studentId: asha, category: "HOSTEL", title: "Hostel fee · Semester 2", amountPaise: 4500000, dueDate: day(3), createdById: admin.id },
+      { studentId: asha, category: "HOSTEL", title: "Hostel fee · Semester 2", amountPaise: 4500000, dueDate: day(3), allowParts: true, createdById: admin.id },
       { studentId: asha, category: "BUS", title: "Bus pass · October", amountPaise: 180000, dueDate: day(-4), createdById: admin.id, remindStage: 3, lastRemindedAt: new Date() },
       { studentId: asha, category: "MESS", title: "Mess fee · September", amountPaise: 350000, dueDate: day(-30), status: "PAID", paidAt: day(-32), createdById: admin.id },
       { studentId: karthik, category: "HOSTEL", title: "Hostel fee · Semester 2", amountPaise: 4500000, dueDate: day(3), createdById: admin.id },
+      { studentId: meghana, category: "BUS", title: "Bus pass · Route 7 · October", amountPaise: 180000, dueDate: day(5), createdById: admin.id },
       { studentId: priya, category: "FINE", title: "Late return fine", amountPaise: 20000, dueDate: day(7), note: "Returned 2 hours late on 12 Oct", createdById: admin.id },
     ],
   });
+
+  // Asha has paid ₹20,000 of her hostel fee by UPI (a part-payment with a receipt);
+  // her mess fee was paid at the office.
+  const ashaHostel = await prisma.fee.findFirstOrThrow({ where: { studentId: asha, category: "HOSTEL" } });
+  const ashaMess = await prisma.fee.findFirstOrThrow({ where: { studentId: asha, category: "MESS" } });
+  const receipt = async () => Number((await prisma.$queryRaw<{ n: bigint }[]>`SELECT nextval('fee_receipt_seq') AS n`)[0]!.n);
+  await prisma.feePayment.create({ data: { feeId: ashaHostel.id, method: "PROOF", amountPaise: 2000000, reference: "UPI 402177889911", status: "VERIFIED", reviewedById: admin.id, reviewedAt: day(-2), receiptNo: await receipt() } });
+  await prisma.feePayment.create({ data: { feeId: ashaMess.id, method: "OFFICE", amountPaise: 350000, reference: "Cash", status: "VERIFIED", reviewedById: admin.id, reviewedAt: day(-32), receiptNo: await receipt() } });
+
+  // --- Hostel helpdesk ---
+  await prisma.ticket.deleteMany({ where: { studentId: { in: ids } } });
+  const wifi = await prisma.ticket.create({
+    data: { studentId: asha, hostelId: blockC.id, category: "Wi-Fi", title: "Wi-Fi drops every evening", details: "Disconnects from about 8 pm on the 2nd floor. Other rooms on the corridor have it too.", location: "Room 214", status: "IN_PROGRESS", assignedToId: warden.id },
+  });
+  await prisma.ticketUpdate.create({ data: { ticketId: wifi.id, authorId: warden.id, body: "IT team is replacing the access point on the 2nd floor tomorrow morning.", status: "IN_PROGRESS" } });
+  await prisma.ticket.create({ data: { studentId: karthik, hostelId: blockC.id, category: "Water", title: "No hot water in the 1st floor bathroom", details: "Geyser not working since yesterday.", location: "1st floor bathroom" } });
+  const fan = await prisma.ticket.create({
+    data: { studentId: priya, hostelId: blockC.id, category: "Room repair", title: "Ceiling fan making noise", details: "Loud rattling at high speed.", location: "Room 305", status: "RESOLVED", assignedToId: warden.id, resolvedAt: new Date(Date.now() - 86_400_000) },
+  });
+  await prisma.ticketUpdate.create({ data: { ticketId: fan.id, authorId: warden.id, body: "Electrician tightened the mount and replaced the regulator.", status: "RESOLVED" } });
 
   // --- Events ---
   await prisma.campusEvent.deleteMany({});
@@ -269,6 +305,16 @@ async function main() {
       { category: "Food near campus", partnerName: "Quick delivery apps", title: "Diwali gift hampers delivered to the gate", body: "Order hampers and pooja items on Blinkit or Zepto; collect at the security desk.", url: "https://www.zeptonow.com", sortOrder: 3, occasionId: diwali.id, createdById: admin.id },
     ],
   });
+
+  // A month of offer taps, for the sponsor report.
+  const liveOffers = await prisma.offer.findMany({ select: { id: true, sortOrder: true } });
+  const today = new Date(new Date().toISOString().slice(0, 10));
+  for (const o of liveOffers) {
+    for (let d = 0; d < Math.min(today.getUTCDate(), 20); d++) {
+      const taps = Math.max(0, Math.round((o.sortOrder + 2) * (0.6 + ((d * 7 + o.sortOrder) % 5) / 5)));
+      if (taps) await prisma.offerDailyStat.create({ data: { offerId: o.id, day: new Date(today.getTime() - d * 86_400_000), taps } });
+    }
+  }
 
   console.log(`Seeded demo accounts. Password for all: ${PASSWORD}`);
   console.log("  student@outpass.dev  parent@outpass.dev  warden@outpass.dev  guard@outpass.dev  admin@outpass.dev  faculty@outpass.dev (HOD)");

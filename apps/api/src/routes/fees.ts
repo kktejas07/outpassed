@@ -12,6 +12,9 @@ import { prisma } from "../lib/prisma";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 import { decodePhoto } from "./photos";
+import { readImage, storeImage } from "../lib/blobStore";
+import { receiptPdf } from "../lib/receipt";
+import { campusInfo } from "./setup";
 
 export const FEE_LABEL: Record<FeeCategory, string> = {
   HOSTEL: "Hostel fee",
@@ -25,19 +28,26 @@ export const FEE_LABEL: Record<FeeCategory, string> = {
 export const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 const feeInclude = {
-  payments: { orderBy: { createdAt: "desc" }, take: 5, select: { id: true, method: true, status: true, amountPaise: true, reference: true, note: true, createdAt: true, proofMime: true, reviewedAt: true } },
+  payments: { orderBy: { createdAt: "desc" }, take: 30, select: { id: true, method: true, status: true, amountPaise: true, reference: true, note: true, createdAt: true, proofMime: true, reviewedAt: true, receiptNo: true } },
   student: { select: { id: true, name: true, student: { select: { rollNo: true, hostel: true } } } },
 } satisfies Prisma.FeeInclude;
 type FeeRow = Prisma.FeeGetPayload<{ include: typeof feeInclude }>;
 
 const today = () => new Date(new Date().toISOString().slice(0, 10));
 
+/** Paise accepted so far (verified payments). */
+const paidOf = (f: { payments: { status: string; amountPaise: number }[] }) => f.payments.filter((p) => p.status === "VERIFIED").reduce((n, p) => n + p.amountPaise, 0);
+
 function toFeeDto(f: FeeRow) {
+  const paid = paidOf(f);
   return {
     id: f.id,
     category: f.category,
     title: f.title,
     amountPaise: f.amountPaise,
+    paidPaise: paid,
+    remainingPaise: f.status === "WAIVED" ? 0 : Math.max(0, f.amountPaise - paid),
+    allowParts: f.allowParts,
     dueDate: f.dueDate.toISOString().slice(0, 10),
     status: f.status,
     overdue: f.status === "DUE" && f.dueDate < today(),
@@ -53,23 +63,52 @@ function toFeeDto(f: FeeRow) {
       note: p.note,
       createdAt: p.createdAt.toISOString(),
       proofUrl: p.proofMime ? mediaUrl("fee-proof", p.id) : null,
+      receiptNo: p.receiptNo,
+      receiptUrl: p.status === "VERIFIED" && p.receiptNo ? mediaUrl("receipt", p.id) : null,
     })),
   };
 }
 
-async function markPaid(feeId: string, paymentId: string, reviewerId: string | null) {
+/**
+ * Accepts a payment: gives it a receipt number, then marks the fee paid once
+ * accepted payments cover it (a part-payment leaves it due for the rest).
+ */
+async function acceptPayment(feeId: string, paymentId: string, reviewerId: string | null) {
   const now = new Date();
-  await prisma.$transaction([
-    prisma.feePayment.update({ where: { id: paymentId }, data: { status: "VERIFIED", reviewedById: reviewerId, reviewedAt: now } }),
-    prisma.fee.update({ where: { id: feeId }, data: { status: "PAID", paidAt: now } }),
-  ]);
-  const fee = await prisma.fee.findUniqueOrThrow({ where: { id: feeId } });
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "fees" WHERE id = ${feeId} FOR UPDATE`;
+    const [{ n }] = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('fee_receipt_seq') AS n`;
+    const payment = await tx.feePayment.update({ where: { id: paymentId }, data: { status: "VERIFIED", reviewedById: reviewerId, reviewedAt: now, receiptNo: Number(n) } });
+    const fee = await tx.fee.findUniqueOrThrow({ where: { id: feeId }, include: { payments: { select: { status: true, amountPaise: true, method: true } } } });
+    const paid = paidOf(fee);
+    const pendingProof = fee.payments.some((p) => p.status === "PENDING" && p.method === "PROOF");
+    const full = paid >= fee.amountPaise;
+    await tx.fee.update({ where: { id: feeId }, data: full ? { status: "PAID", paidAt: now } : { status: pendingProof ? "SUBMITTED" : "DUE" } });
+    return { fee, paid, full, amount: payment.amountPaise };
+  });
+  const { fee, paid, full, amount } = result;
   notifyLater([fee.studentId, ...(await guardianIds(fee.studentId))], {
     kind: "FEE_PAID",
-    title: `${fee.title} paid`,
-    body: `${rupees(fee.amountPaise)} received. Thank you.`,
+    title: full ? `${fee.title} paid` : `${rupees(amount)} received for ${fee.title}`,
+    body: full ? `${rupees(amount)} received. Thank you. Your receipt is in the app.` : `${rupees(fee.amountPaise - paid)} left to pay. Your receipt is in the app.`,
     data: { feeId },
   });
+}
+
+/** How much this payment should be: the rest of the fee, or a part the student chose when the fee allows it. */
+function payAmount(fee: { amountPaise: number; allowParts: boolean }, paid: number, requested?: number) {
+  const remaining = fee.amountPaise - paid;
+  if (remaining <= 0) throw new HttpError(409, "ALREADY_PAID", "This fee is already settled");
+  if (requested === undefined || requested === remaining) return remaining;
+  if (!fee.allowParts) throw new HttpError(400, "NO_PART_PAYMENTS", "This fee has to be paid in full");
+  const min = Math.min(10_000, remaining); // ₹100, or what's left if less
+  if (requested < min || requested > remaining) throw new HttpError(400, "BAD_AMOUNT", `Pay between ${rupees(min)} and ${rupees(remaining)}`);
+  return requested;
+}
+
+async function verifiedPaid(feeId: string) {
+  const agg = await prisma.feePayment.aggregate({ where: { feeId, status: "VERIFIED" }, _sum: { amountPaise: true } });
+  return agg._sum.amountPaise ?? 0;
 }
 
 const targetSchema = z
@@ -78,8 +117,10 @@ const targetSchema = z
     hostelId: z.uuid().optional(),
     departmentId: z.uuid().optional(),
     allStudents: z.boolean().optional(),
+    /** Every hosteller, or every day scholar (e.g. hostel fee vs bus fee). */
+    residence: z.enum(["HOSTELLER", "DAY_SCHOLAR"]).optional(),
   })
-  .refine((t) => [t.studentIds?.length, t.hostelId, t.departmentId, t.allStudents].filter(Boolean).length === 1, { message: "Choose who the fee is for" });
+  .refine((t) => [t.studentIds?.length, t.hostelId, t.departmentId, t.allStudents, t.residence].filter(Boolean).length === 1, { message: "Choose who the fee is for" });
 
 /**
  * Fees and dues: the office assigns them; students pay online, or upload a
@@ -103,7 +144,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
         const payment = linkId ? await prisma.feePayment.findUnique({ where: { gatewayOrderId: linkId } }) : null;
         if (payment && payment.status === "PENDING") {
           await prisma.feePayment.update({ where: { id: payment.id }, data: { gatewayPaymentId: event.payload?.payment?.entity?.id ?? null } });
-          await markPaid(payment.feeId, payment.id, null);
+          await acceptPayment(payment.feeId, payment.id, null);
         }
       }
       return reply.status(200).send({ ok: true });
@@ -125,7 +166,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
       const open = fees.filter((f) => f.status === "DUE" || f.status === "SUBMITTED");
       return {
         fees,
-        totals: { duePaise: open.reduce((n, f) => n + f.amountPaise, 0), overdue: fees.filter((f) => f.overdue).length, open: open.length },
+        totals: { duePaise: open.reduce((n, f) => n + f.remainingPaise, 0), overdue: fees.filter((f) => f.overdue).length, open: open.length },
         onlinePayment: onlinePaymentsEnabled(),
       };
     });
@@ -134,14 +175,16 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
     authed.post("/fees/:id/pay", async (request) => {
       requireRole(request, "STUDENT", "PARENT");
       const { id } = idParamSchema.parse(request.params);
+      const { amountPaise: requested } = z.object({ amountPaise: z.number().int().positive().optional() }).parse(request.body ?? {});
       if (!onlinePaymentsEnabled()) throw new HttpError(400, "ONLINE_PAYMENT_OFF", "Online payment isn't set up yet. Pay at the office or upload your payment proof.");
       const fee = await prisma.fee.findUnique({ where: { id }, include: { student: true } });
       const allowed = fee && (fee.studentId === request.user.sub || (await prisma.guardianship.count({ where: { parentId: request.user.sub, studentId: fee.studentId } })) > 0);
       if (!fee || !allowed) throw new HttpError(404, "NOT_FOUND", "Fee not found");
       if (fee.status === "PAID" || fee.status === "WAIVED") throw new HttpError(409, "ALREADY_PAID", "This fee is already settled");
+      const amount = payAmount(fee, await verifiedPaid(fee.id), requested);
       const payer = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub } });
       const link = await paymentGateway().createLink({
-        amountPaise: fee.amountPaise,
+        amountPaise: amount,
         feeId: fee.id,
         description: `${fee.title} · ${fee.student.name}`,
         name: payer.name,
@@ -149,7 +192,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
         email: payer.email,
         callbackUrl: `${env.PUBLIC_WEB_URL.replace(/\/+$/, "")}/app/fees?checked=${fee.id}`,
       });
-      await prisma.feePayment.create({ data: { feeId: fee.id, method: "ONLINE", amountPaise: fee.amountPaise, gatewayOrderId: link.id } });
+      await prisma.feePayment.create({ data: { feeId: fee.id, method: "ONLINE", amountPaise: amount, gatewayOrderId: link.id } });
       return { url: link.url };
     });
 
@@ -161,7 +204,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
         const s = await paymentGateway().linkStatus(p.gatewayOrderId!);
         if (s.status === "paid") {
           await prisma.feePayment.update({ where: { id: p.id }, data: { gatewayPaymentId: s.paymentId } });
-          await markPaid(id, p.id, null);
+          await acceptPayment(id, p.id, null);
           break;
         }
       }
@@ -174,14 +217,16 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
     authed.post("/fees/:id/proof", { bodyLimit: 1024 * 1024 }, async (request, reply) => {
       requireRole(request, "STUDENT", "PARENT");
       const { id } = idParamSchema.parse(request.params);
-      const body = photoUploadSchema.extend({ reference: z.string().trim().min(4).max(60) }).parse(request.body);
+      const body = photoUploadSchema.extend({ reference: z.string().trim().min(4).max(60), amountPaise: z.number().int().positive().optional() }).parse(request.body);
       const fee = await prisma.fee.findUnique({ where: { id } });
       const allowed = fee && (fee.studentId === request.user.sub || (await prisma.guardianship.count({ where: { parentId: request.user.sub, studentId: fee.studentId } })) > 0);
       if (!fee || !allowed) throw new HttpError(404, "NOT_FOUND", "Fee not found");
       if (fee.status !== "DUE") throw new HttpError(409, "NOT_DUE", fee.status === "SUBMITTED" ? "Your proof is already with the office" : "This fee is already settled");
-      const { data, mime } = decodePhoto(body.image);
+      const amount = payAmount(fee, await verifiedPaid(id), body.amountPaise);
+      const img = decodePhoto(body.image);
+      const stored = await storeImage("fee-proof", img);
       await prisma.$transaction([
-        prisma.feePayment.create({ data: { feeId: id, method: "PROOF", amountPaise: fee.amountPaise, reference: body.reference, proof: data, proofMime: mime } }),
+        prisma.feePayment.create({ data: { feeId: id, method: "PROOF", amountPaise: amount, reference: body.reference, proof: stored.data, proofKey: stored.key, proofMime: img.mime } }),
         prisma.fee.update({ where: { id }, data: { status: "SUBMITTED" } }),
       ]);
       const updated = await prisma.fee.findUniqueOrThrow({ where: { id }, include: feeInclude });
@@ -199,6 +244,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
           amountPaise: z.number().int().min(100).max(1_00_00_000_00),
           dueDate: z.iso.date(),
           note: z.string().trim().max(300).optional(),
+          allowParts: z.boolean().default(false),
           target: targetSchema,
         })
         .parse(request.body);
@@ -209,13 +255,14 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
           ...(t.studentIds ? { id: { in: t.studentIds } } : {}),
           ...(t.hostelId ? { student: { hostelId: t.hostelId } } : {}),
           ...(t.departmentId ? { student: { departmentId: t.departmentId } } : {}),
+          ...(t.residence ? { student: { residence: t.residence } } : {}),
         },
         select: { id: true },
       });
       if (students.length === 0) throw new HttpError(400, "NO_STUDENTS", "No students match");
       const due = new Date(`${body.dueDate}T00:00:00Z`);
       await prisma.fee.createMany({
-        data: students.map((s) => ({ studentId: s.id, category: body.category, title: body.title, amountPaise: body.amountPaise, dueDate: due, note: body.note ?? null, createdById: request.user.sub })),
+        data: students.map((s) => ({ studentId: s.id, category: body.category, title: body.title, amountPaise: body.amountPaise, dueDate: due, note: body.note ?? null, allowParts: body.allowParts, createdById: request.user.sub })),
       });
       notifyLater(students.map((s) => s.id), {
         kind: "FEE_DUE",
@@ -233,15 +280,24 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
         ...(q.status === "OVERDUE" ? { status: "DUE", dueDate: { lt: today() } } : q.status ? { status: q.status } : {}),
         ...(q.q ? { student: { OR: [{ name: { contains: q.q, mode: "insensitive" } }, { student: { rollNo: { equals: q.q, mode: "insensitive" } } }] } } : {}),
       };
-      const [rows, open, paid, toReview] = await Promise.all([
+      const openWhere: Prisma.FeeWhereInput = { status: { in: ["DUE", "SUBMITTED"] } };
+      const [rows, open, partOfOpen, collected, paidCount, toReview] = await Promise.all([
         prisma.fee.findMany({ where, include: feeInclude, orderBy: [{ dueDate: "asc" }], take: 300 }),
-        prisma.fee.aggregate({ where: { status: { in: ["DUE", "SUBMITTED"] } }, _sum: { amountPaise: true }, _count: true }),
-        prisma.fee.aggregate({ where: { status: "PAID" }, _sum: { amountPaise: true }, _count: true }),
+        prisma.fee.aggregate({ where: openWhere, _sum: { amountPaise: true }, _count: true }),
+        prisma.feePayment.aggregate({ where: { status: "VERIFIED", fee: openWhere }, _sum: { amountPaise: true } }),
+        prisma.feePayment.aggregate({ where: { status: "VERIFIED" }, _sum: { amountPaise: true } }),
+        prisma.fee.count({ where: { status: "PAID" } }),
         prisma.feePayment.count({ where: { method: "PROOF", status: "PENDING" } }),
       ]);
       return {
         fees: rows.map(toFeeDto),
-        summary: { outstandingPaise: open._sum.amountPaise ?? 0, outstanding: open._count, collectedPaise: paid._sum.amountPaise ?? 0, paid: paid._count, proofsToReview: toReview },
+        summary: {
+          outstandingPaise: (open._sum.amountPaise ?? 0) - (partOfOpen._sum.amountPaise ?? 0),
+          outstanding: open._count,
+          collectedPaise: collected._sum.amountPaise ?? 0,
+          paid: paidCount,
+          proofsToReview: toReview,
+        },
       };
     });
 
@@ -254,7 +310,7 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
       if (!p || p.method !== "PROOF") throw new HttpError(404, "NOT_FOUND", "Payment not found");
       if (p.status !== "PENDING") throw new HttpError(409, "ALREADY_REVIEWED", "This payment was already checked");
       if (body.decision === "APPROVE") {
-        await markPaid(p.feeId, p.id, request.user.sub);
+        await acceptPayment(p.feeId, p.id, request.user.sub);
       } else {
         if (!body.note) throw new HttpError(400, "REASON_REQUIRED", "Say why, so the student can fix it");
         await prisma.$transaction([
@@ -272,13 +328,15 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
     authed.post("/admin/fees/:id/mark-paid", async (request) => {
       requireRole(request, "ADMIN");
       const { id } = idParamSchema.parse(request.params);
-      const { reference } = z.object({ reference: z.string().trim().max(60).optional() }).parse(request.body ?? {});
+      const { reference, amountPaise } = z.object({ reference: z.string().trim().max(60).optional(), amountPaise: z.number().int().positive().optional() }).parse(request.body ?? {});
       const fee = await prisma.fee.findUnique({ where: { id } });
       if (!fee) throw new HttpError(404, "NOT_FOUND", "Fee not found");
-      if (fee.status === "PAID") throw new HttpError(409, "ALREADY_PAID", "Already paid");
-      const p = await prisma.feePayment.create({ data: { feeId: id, method: "OFFICE", amountPaise: fee.amountPaise, reference: reference ?? null } });
-      await markPaid(id, p.id, request.user.sub);
-      await audit(request, "FEE_MARKED_PAID", `Marked "${fee.title}" paid at the office${reference ? ` (ref ${reference})` : ""}`, { type: "fee", id });
+      if (fee.status === "PAID" || fee.status === "WAIVED") throw new HttpError(409, "ALREADY_PAID", "Already paid");
+      // The office can take part of a fee at the counter even if online part-payments are off.
+      const amount = payAmount({ ...fee, allowParts: true }, await verifiedPaid(id), amountPaise);
+      const p = await prisma.feePayment.create({ data: { feeId: id, method: "OFFICE", amountPaise: amount, reference: reference ?? null } });
+      await acceptPayment(id, p.id, request.user.sub);
+      await audit(request, "FEE_MARKED_PAID", `Took ${rupees(amount)} for "${fee.title}" at the office${reference ? ` (ref ${reference})` : ""}`, { type: "fee", id });
       return toFeeDto(await prisma.fee.findUniqueOrThrow({ where: { id }, include: feeInclude }));
     });
 
@@ -301,16 +359,41 @@ export async function feeRoutes(app: FastifyInstance): Promise<void> {
 
   // Signed media (no sign-in header, so <Image> works everywhere).
   app.get("/media/:kind/:id", async (request, reply) => {
-    const { kind, id } = z.object({ kind: z.enum(["fee-proof", "market"]), id: z.uuid() }).parse(request.params);
+    const { kind, id } = z.object({ kind: z.enum(["fee-proof", "market", "receipt", "ticket"]), id: z.uuid() }).parse(request.params);
     const q = z.object({ v: z.coerce.number().int().default(0), exp: z.coerce.number().int(), sig: z.string().min(10).max(100) }).safeParse(request.query);
     if (!q.success || !verifyMedia(kind, id, q.data.exp, q.data.v, q.data.sig)) throw new HttpError(403, "FORBIDDEN", "This link has expired");
+
+    if (kind === "receipt") {
+      const p = await prisma.feePayment.findUnique({
+        where: { id },
+        include: { fee: { include: { student: { select: { name: true, student: { select: { rollNo: true, hostel: true } } } }, payments: { select: { status: true, amountPaise: true, receiptNo: true } } } } },
+      });
+      if (!p || p.status !== "VERIFIED" || !p.receiptNo) throw new HttpError(404, "NOT_FOUND", "No receipt for this payment");
+      // Paid so far as of this receipt: accepted payments up to and including this one.
+      const upTo = p.fee.payments.filter((x) => x.status === "VERIFIED" && x.receiptNo !== null && x.receiptNo <= p.receiptNo!).reduce((n, x) => n + x.amountPaise, 0);
+      const pdf = await receiptPdf({
+        college: await campusInfo(),
+        receiptNo: p.receiptNo,
+        paidAt: p.reviewedAt ?? p.createdAt,
+        student: { name: p.fee.student.name, rollNo: p.fee.student.student?.rollNo ?? null, hostel: p.fee.student.student?.hostel ?? null },
+        fee: { title: p.fee.title, category: FEE_LABEL[p.fee.category], amountPaise: p.fee.amountPaise },
+        payment: { amountPaise: p.amountPaise, method: p.method, reference: p.reference },
+        paidSoFarPaise: upTo,
+      });
+      reply.header("content-type", "application/pdf").header("content-disposition", `inline; filename="receipt-OP-${String(p.receiptNo).padStart(6, "0")}.pdf"`).header("cache-control", "private, max-age=3600");
+      return reply.send(pdf);
+    }
+
     const row =
       kind === "fee-proof"
-        ? await prisma.feePayment.findUnique({ where: { id }, select: { proof: true, proofMime: true } }).then((r) => (r?.proof ? { data: r.proof, mime: r.proofMime! } : null))
-        : await prisma.marketItem.findUnique({ where: { id }, select: { photo: true, photoMime: true } }).then((r) => (r?.photo ? { data: r.photo, mime: r.photoMime! } : null));
-    if (!row) throw new HttpError(404, "NOT_FOUND", "Not found");
+        ? await prisma.feePayment.findUnique({ where: { id }, select: { proof: true, proofKey: true, proofMime: true } }).then((r) => (r?.proofMime ? { data: r.proof, key: r.proofKey, mime: r.proofMime } : null))
+        : kind === "market"
+          ? await prisma.marketItem.findUnique({ where: { id }, select: { photo: true, photoKey: true, photoMime: true } }).then((r) => (r?.photoMime ? { data: r.photo, key: r.photoKey, mime: r.photoMime } : null))
+          : await prisma.ticket.findUnique({ where: { id }, select: { photo: true, photoKey: true, photoMime: true } }).then((r) => (r?.photoMime ? { data: r.photo, key: r.photoKey, mime: r.photoMime } : null));
+    const bytes = row ? await readImage(row) : null;
+    if (!row || !bytes) throw new HttpError(404, "NOT_FOUND", "Not found");
     reply.header("content-type", row.mime).header("cache-control", "private, max-age=3600").header("cross-origin-resource-policy", "cross-origin");
-    return reply.send(Buffer.from(row.data));
+    return reply.send(Buffer.from(bytes));
   });
 
 }

@@ -128,6 +128,9 @@ model User {
   marketInterests MarketInterest[]
   offersCreated   Offer[]
   occasionsCreated Occasion[]
+  tickets         Ticket[]       @relation("TicketStudent")
+  ticketsAssigned Ticket[]       @relation("TicketAssignee")
+  ticketUpdates   TicketUpdate[]
   /// Students: a guardian's photo consent (needed under 18 or on a school campus).
   photoConsent    PhotoConsent? @relation("ConsentStudent")
   consentsGiven   PhotoConsent[] @relation("ConsentGuardian")
@@ -147,10 +150,13 @@ model StudentProfile {
   hostelRef   Hostel?   @relation(fields: [hostelId], references: [id], onDelete: SetNull)
   room        String?
   dateOfBirth DateTime? @db.Date
+  /// Hostellers live on campus (hostel, room, roll call); day scholars don't.
+  residence   Residence @default(HOSTELLER)
   departmentId String?
   department  Department? @relation("DepartmentStudents", fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([hostelId])
+  @@index([residence])
   @@map("student_profiles")
 }
 
@@ -240,6 +246,7 @@ model Visit {
   visitorIdNumber String?
   /// Picture the guard took when the visitor arrived without an invite.
   visitorPhoto     Bytes?
+  visitorPhotoKey  String?
   visitorPhotoMime String?
   /// Regular pass: weekdays it works (0 = Sunday … 6 = Saturday). Empty for a one-off visit.
   repeatDays     Int[]       @default([])
@@ -475,6 +482,7 @@ model Hostel {
   wardens   WardenHostel[]
   notices   Notice[]
   rollCalls RollCall[]
+  tickets   Ticket[]
 
   @@map("hostels")
 }
@@ -495,7 +503,9 @@ model WardenHostel {
 model UserPhoto {
   userId    String   @id
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  data      Bytes
+  /// The image, unless it lives in the photo bucket (`storageKey`).
+  data      Bytes?
+  storageKey String?
   mime      String
   updatedAt DateTime @updatedAt
 
@@ -607,7 +617,8 @@ model Department {
 model GatePhoto {
   gateEventId String    @id
   gateEvent   GateEvent @relation(fields: [gateEventId], references: [id], onDelete: Cascade)
-  data        Bytes
+  data        Bytes?
+  storageKey  String?
   mime        String
   createdAt   DateTime  @default(now())
 
@@ -642,6 +653,8 @@ model Fee {
   amountPaise  Int
   dueDate      DateTime     @db.Date
   status       FeeStatus    @default(DUE)
+  /// The office allows paying this fee in parts.
+  allowParts   Boolean      @default(false)
   note         String?
   createdById  String
   createdBy    User         @relation("FeesCreated", fields: [createdById], references: [id])
@@ -679,7 +692,10 @@ model FeePayment {
   /// UPI / bank reference the student typed, or the gateway payment id.
   reference        String?
   proof            Bytes?
+  proofKey         String?
   proofMime        String?
+  /// Set when the payment is accepted; printed on the receipt.
+  receiptNo        Int?          @unique
   gatewayOrderId   String?       @unique
   gatewayPaymentId String?
   reviewedById     String?
@@ -757,6 +773,7 @@ model MarketItem {
   condition   String           @default("Used")
   status      MarketStatus     @default(PENDING)
   photo       Bytes?
+  photoKey    String?
   photoMime   String?
   reports     Int              @default(0)
   occasionId  String?
@@ -796,6 +813,7 @@ model Offer {
   sortOrder   Int       @default(0)
   /// Total taps, not per person.
   clicks      Int       @default(0)
+  dailyStats  OfferDailyStat[]
   /// Featured in the banner strip on the student home and Campus tab.
   showAsBanner Boolean  @default(false)
   occasionId  String?
@@ -844,4 +862,72 @@ model PhotoConsent {
   givenAt    DateTime @default(now())
 
   @@map("photo_consents")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+/// A hostel helpdesk request: water, Wi-Fi, room repairs and so on.
+model Ticket {
+  id           String         @id @default(uuid())
+  /// Short number people can quote ("#1042").
+  number       Int            @unique @default(autoincrement())
+  studentId    String
+  student      User           @relation("TicketStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  hostelId     String?
+  hostel       Hostel?        @relation(fields: [hostelId], references: [id], onDelete: SetNull)
+  category     String
+  title        String
+  details      String
+  /// Room or place, e.g. "Room 214" or "2nd floor washroom".
+  location     String?
+  photo        Bytes?
+  photoKey     String?
+  photoMime    String?
+  status       TicketStatus   @default(OPEN)
+  assignedToId String?
+  assignedTo   User?          @relation("TicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  updates      TicketUpdate[]
+
+  @@index([hostelId, status])
+  @@index([studentId])
+  @@map("tickets")
+}
+
+model TicketUpdate {
+  id        String        @id @default(uuid())
+  ticketId  String
+  ticket    Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  /// Set when this update changed the status.
+  status    TicketStatus?
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
+  @@map("ticket_updates")
+}
+
+/// Offer taps per day: totals only, never who tapped.
+model OfferDailyStat {
+  offerId String
+  offer   Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  day     DateTime @db.Date
+  taps    Int      @default(0)
+
+  @@id([offerId, day])
+  @@map("offer_daily_stats")
+}
+
+enum Residence {
+  HOSTELLER
+  DAY_SCHOLAR
 }

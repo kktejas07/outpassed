@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, Switch, View } from "react-native";
 import { api, campus, errorMessage, photoSrc, rupees, type FeeDto } from "../../src/api/client";
 import { useSession } from "../../src/auth/session";
 import { useQuery } from "../../src/lib/useQuery";
@@ -44,10 +44,13 @@ function AssignFee({ onDone }: { onDone: () => void }) {
   const [amount, setAmount] = useState("");
   const [due, setDue] = useState("15");
   const [target, setTarget] = useState("all");
+  const [allowParts, setAllowParts] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const opts = [
     { value: "all", label: "All students" },
+    { value: "r:HOSTELLER", label: "All hostellers" },
+    { value: "r:DAY_SCHOLAR", label: "All day scholars" },
     ...(targets.data?.hostels ?? []).map((h) => ({ value: `h:${h.id}`, label: h.name })),
     ...(targets.data?.departments ?? []).map((d) => ({ value: `d:${d.id}`, label: d.code ?? d.name })),
   ];
@@ -59,8 +62,12 @@ function AssignFee({ onDone }: { onDone: () => void }) {
     setError(null);
     try {
       const date = new Date(Date.now() + Number(due) * 86_400_000).toISOString().slice(0, 10);
-      const t = target === "all" ? { allStudents: true } : target.startsWith("h:") ? { hostelId: target.slice(2) } : { departmentId: target.slice(2) };
-      const res = await campus.assignFee(token, { category, title: title.trim(), amountPaise: Math.round(Number(amount) * 100), dueDate: date, target: t });
+      const t = target === "all"
+        ? { allStudents: true }
+        : target.startsWith("r:")
+          ? { residence: target.slice(2) as "HOSTELLER" | "DAY_SCHOLAR" }
+          : target.startsWith("h:") ? { hostelId: target.slice(2) } : { departmentId: target.slice(2) };
+      const res = await campus.assignFee(token, { category, title: title.trim(), amountPaise: Math.round(Number(amount) * 100), dueDate: date, allowParts, target: t });
       ribbon.show({ tone: "success", title: `Fee sent to ${res.created} student${res.created === 1 ? "" : "s"}`, body: "They'll get reminders before it's due.", celebrate: true });
       setTitle("");
       setAmount("");
@@ -82,6 +89,13 @@ function AssignFee({ onDone }: { onDone: () => void }) {
       <Chips options={dueIn} value={due} onChange={setDue} />
       <Text variant="eyebrow">For</Text>
       <Chips options={opts} value={target} onChange={setTarget} />
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text variant="label">Allow paying in parts</Text>
+          <Text variant="caption">Students can pay some now and the rest later; each part gets its own receipt.</Text>
+        </View>
+        <Switch accessibilityLabel="Allow paying in parts" value={allowParts} onValueChange={setAllowParts} trackColor={{ true: color.indigo, false: color.line }} />
+      </View>
       {error ? <ErrorNote message={error} /> : null}
       <Button icon="send" label="Send to students" loading={busy} disabled={!valid} onPress={submit} />
     </PopIn>
@@ -116,9 +130,9 @@ function ProofCard({ f, onChanged }: { f: FeeDto; onChanged: () => void }) {
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <Text variant="label">{f.student.name}</Text>
-          <Text variant="caption">{[f.student.rollNo, f.title].filter(Boolean).join(" · ")}</Text>
+          <Text variant="caption">{[f.student.rollNo, f.title, p.amountPaise < f.remainingPaise ? `part of ${rupees(f.remainingPaise)} left` : null].filter(Boolean).join(" · ")}</Text>
         </View>
-        <Text style={styles.amount}>{rupees(f.amountPaise)}</Text>
+        <Text style={styles.amount}>{rupees(p.amountPaise)}</Text>
       </View>
       {src ? <Image source={{ uri: src }} style={styles.proof} resizeMode="contain" accessibilityLabel="Payment screenshot" /> : null}
       <Text variant="caption">Reference: <Text variant="label">{p.reference}</Text></Text>
@@ -185,8 +199,8 @@ export default function FeesAdmin() {
                           <Text variant="caption" numberOfLines={1}>{[f.student.rollNo, f.title, `due ${f.dueDate}`].filter(Boolean).join(" · ")}</Text>
                         </View>
                         <View style={{ alignItems: "flex-end", gap: 4 }}>
-                          <Text style={styles.amount}>{rupees(f.amountPaise)}</Text>
-                          {f.overdue ? <Pill label="Overdue" tone="red" /> : null}
+                          <Text style={styles.amount}>{rupees(f.status === "PAID" ? f.amountPaise : f.remainingPaise)}</Text>
+                          {f.overdue ? <Pill label="Overdue" tone="red" /> : f.paidPaise > 0 && f.status !== "PAID" ? <Pill label="Part paid" tone="amber" /> : null}
                         </View>
                       </View>
                       {f.status === "DUE" ? (

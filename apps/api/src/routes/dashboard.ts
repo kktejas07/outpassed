@@ -19,7 +19,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const mine = scope ? { student: studentInHostels(scope) } : {};
     const mineSos = scope ? { raisedBy: studentInHostels(scope) } : {};
 
-    const [outNow, overdueRows, pendingApprovals, visitorsOnSite, movementsToday, openSos, parcelsWaiting, extensionRequests] = await Promise.all([
+    const [outNow, overdueRows, pendingApprovals, visitorsOnSite, movementsToday, openSos, parcelsWaiting, extensionRequests, openTickets] = await Promise.all([
       prisma.outpass.count({ where: { ...mine, status: "OUT" } }),
       prisma.outpass.findMany({
         where: { ...mine, status: "OUT", returnBy: { lt: now } },
@@ -33,6 +33,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       prisma.sosAlert.count({ where: { ...mineSos, status: { in: ["OPEN", "ACKNOWLEDGED"] } } }),
       prisma.parcel.count({ where: { ...mine, status: "AT_GATE" } }),
       prisma.outpassExtension.count({ where: { status: "PENDING", ...(scope ? { outpass: mine } : {}) } }),
+      prisma.ticket.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] }, ...(scope ? { hostelId: { in: scope } } : {}) } }),
     ]);
 
     const summary: DashboardSummary = {
@@ -44,6 +45,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       openSos,
       parcelsWaiting,
       extensionRequests,
+      openTickets,
       overdueList: overdueRows.map((r) => toOutpassDto(r, now)),
     };
     return summary;

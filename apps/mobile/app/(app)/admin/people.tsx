@@ -101,6 +101,23 @@ export default function People() {
     }
   }
 
+  // Hosteller ↔ day scholar. A day scholar loses their hostel room and warden.
+  const [switching, setSwitching] = useState<string | null>(null);
+  async function switchResidence(u: UserDto) {
+    if (!token) return;
+    const next = u.student?.residence === "DAY_SCHOLAR" ? "HOSTELLER" : "DAY_SCHOLAR";
+    setSwitching(u.id);
+    try {
+      await campus.setResidence(token, u.id, next);
+      await vm.reload();
+      ribbon.show({ tone: "success", title: next === "DAY_SCHOLAR" ? `${u.name} is now a day scholar` : `${u.name} is now a hosteller`, body: next === "HOSTELLER" ? "Set their hostel and room from Import or Hostels." : "Their outpasses go to faculty or the HOD." });
+    } catch (err) {
+      setPhotoError(errorMessage(err, "Couldn't change where they stay"));
+    } finally {
+      setSwitching(null);
+    }
+  }
+
   return (
     <Screen
       title="People"
@@ -137,7 +154,11 @@ export default function People() {
                 <Text variant="label">{u.name}</Text>
                 <Text variant="caption" numberOfLines={1}>{u.student?.rollNo ? `${u.student.rollNo} · ` : ""}{u.email}</Text>
               </View>
-              <Pill label={u.role.toLowerCase()} tone={u.role === "STUDENT" ? "accent" : "indigo"} />
+              {u.role === "STUDENT" ? (
+                <Pill label={u.student?.residence === "DAY_SCHOLAR" ? "day scholar" : "hosteller"} tone={u.student?.residence === "DAY_SCHOLAR" ? "indigo" : "accent"} />
+              ) : (
+                <Pill label={u.role.toLowerCase()} tone="indigo" />
+              )}
             </View>
             {u.role === "STUDENT" ? (
               linking === u.id ? (
@@ -154,6 +175,15 @@ export default function People() {
                     style={{ paddingHorizontal: 0 }}
                     onPress={() => void addPhoto(u)}
                   />
+                  <Button
+                    compact
+                    tone="ghost"
+                    icon="swap-horizontal-outline"
+                    label={u.student?.residence === "DAY_SCHOLAR" ? "Make hosteller" : "Make day scholar"}
+                    loading={switching === u.id}
+                    style={{ paddingHorizontal: 0 }}
+                    onPress={() => void switchResidence(u)}
+                  />
                 </View>
               )
             ) : null}
@@ -167,6 +197,6 @@ export default function People() {
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   tools: { flexDirection: "row", gap: 10 },
-  actions: { flexDirection: "row", gap: 18, marginTop: 6 },
+  actions: { flexDirection: "row", flexWrap: "wrap", columnGap: 18, marginTop: 6 },
   notice: { padding: 12, borderRadius: 14, backgroundColor: color.greenSoft },
 });

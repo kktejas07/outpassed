@@ -78,6 +78,7 @@ export function openFromData(data: Record<string, unknown> | undefined) {
   else if (typeof data.itemId === "string") router.push(`/market/${data.itemId}`);
   else if (typeof data.occasionId === "string") router.push(`/occasions/${data.occasionId}`);
   else if (typeof data.consentFor === "string") router.push("/parent");
+  else if (typeof data.ticketId === "string") router.push(`/helpdesk/${data.ticketId}`);
   else router.push("/notifications");
 }
 

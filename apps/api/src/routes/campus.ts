@@ -1,3 +1,4 @@
+import { env } from "../env";
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -12,6 +13,7 @@ import { when } from "../lib/time";
 import { requireRole } from "../plugins/auth";
 import { HttpError } from "../plugins/errorHandler";
 import { decodePhoto } from "./photos";
+import { storeImage } from "../lib/blobStore";
 
 const isAdmin = (r: FastifyRequest) => r.user.role === "ADMIN";
 
@@ -329,9 +331,10 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "OCCASION_OVER", "That sale isn't running right now");
     }
     const photo = body.photo ? decodePhoto(body.photo) : null;
+    const stored = photo ? await storeImage("market", photo) : null;
     const admin = isAdmin(request);
     const item = await prisma.marketItem.create({
-      data: { sellerId: request.user.sub, title: body.title, description: body.description, price: body.price, category: body.category, condition: body.condition, status: admin ? "ACTIVE" : "PENDING", occasionId: body.occasionId ?? null, ...(photo ? { photo: photo.data, photoMime: photo.mime } : {}) },
+      data: { sellerId: request.user.sub, title: body.title, description: body.description, price: body.price, category: body.category, condition: body.condition, status: admin ? "ACTIVE" : "PENDING", occasionId: body.occasionId ?? null, ...(stored ? { photo: stored.data, photoKey: stored.key, photoMime: photo!.mime } : {}) },
       include: itemInclude,
     });
     if (!admin) notifyLater(await idsOfRoles(["ADMIN"]), { kind: "MARKET_PENDING", title: `New listing to review: ${item.title}`, body: `${item.seller.name} · ₹${item.price}`, data: { itemId: item.id } });
@@ -537,6 +540,9 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParamSchema.parse(request.params);
     const o = await prisma.offer.update({ where: { id }, data: { clicks: { increment: 1 } } }).catch(() => null);
     if (!o) throw new HttpError(404, "NOT_FOUND", "Offer not found");
+    // Per-day totals for the sponsor report (the campus's own calendar day).
+    const day = new Date(new Date().toLocaleDateString("en-CA", { timeZone: env.CAMPUS_TZ }));
+    await prisma.offerDailyStat.upsert({ where: { offerId_day: { offerId: id, day } }, create: { offerId: id, day, taps: 1 }, update: { taps: { increment: 1 } } });
     return { url: o.url };
   });
 
@@ -548,6 +554,34 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
       offers: rows.map((o) => ({ ...o, activeFrom: o.activeFrom.toISOString(), activeTo: o.activeTo?.toISOString() ?? null, createdAt: o.createdAt.toISOString() })),
       categories: OFFER_CATEGORIES,
       occasions: occasions.map((x) => toOccasionDto(x)),
+    };
+  });
+
+  /**
+   * The monthly sponsor report: taps per offer per day for one month. Totals
+   * only; Outpass never records who tapped.
+   */
+  app.get("/admin/offers/report", async (request) => {
+    requireRole(request, "ADMIN");
+    const now = new Date();
+    const { month } = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).default(now.toISOString().slice(0, 7)) }).parse(request.query);
+    const [y, m] = month.split("-").map(Number) as [number, number];
+    const from = new Date(Date.UTC(y, m - 1, 1));
+    const to = new Date(Date.UTC(y, m, 1));
+    const rows = await prisma.offerDailyStat.findMany({ where: { day: { gte: from, lt: to } }, include: { offer: { select: { id: true, title: true, partnerName: true, category: true, active: true } } } });
+    const byOffer = new Map<string, { offer: (typeof rows)[number]["offer"]; taps: number; days: Record<string, number> }>();
+    for (const r of rows) {
+      const e = byOffer.get(r.offerId) ?? { offer: r.offer, taps: 0, days: {} };
+      e.taps += r.taps;
+      e.days[r.day.toISOString().slice(0, 10)] = r.taps;
+      byOffer.set(r.offerId, e);
+    }
+    const offers = [...byOffer.values()].sort((a, b) => b.taps - a.taps);
+    return {
+      month,
+      daysInMonth: new Date(Date.UTC(y, m, 0)).getUTCDate(),
+      total: offers.reduce((n, o) => n + o.taps, 0),
+      offers: offers.map((o) => ({ id: o.offer.id, title: o.offer.title, partnerName: o.offer.partnerName, category: o.offer.category, active: o.offer.active, taps: o.taps, days: o.days })),
     };
   });
 

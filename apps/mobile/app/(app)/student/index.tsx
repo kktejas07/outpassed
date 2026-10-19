@@ -27,16 +27,17 @@ export default function StudentHome() {
   const s = user?.student;
   const room = [s?.hostel, s?.room].filter(Boolean).join(", ");
   const a = vm.active;
+  const day = s?.residence === "DAY_SCHOLAR";
 
   const chip: Hero["chip"] = !a
-    ? { label: room ? `On campus · ${room}` : "On campus", tone: "safe" }
+    ? { label: day ? "Day scholar · on campus" : room ? `On campus · ${room}` : "On campus", tone: "safe" }
     : a.overdue
       ? { label: `Overdue · was due ${when(a.returnBy)}`, tone: "danger" }
       : a.status === "OUT"
         ? { label: `Out · back by ${when(a.returnBy)}`, tone: "info" }
         : a.status === "APPROVED"
           ? { label: `Pass approved · from ${when(a.leaveAt)}`, tone: "safe" }
-          : { label: a.status === "PENDING_FACULTY" ? "Waiting for faculty" : a.status === "PENDING_PARENT" ? "Waiting for your parent" : "Waiting for the warden", tone: "warn" };
+          : { label: a.status === "PENDING_FACULTY" ? "Waiting for faculty" : a.status === "PENDING_PARENT" ? "Waiting for your parent" : day ? "Waiting for the office" : "Waiting for the warden", tone: "warn" };
 
   return (
     <Screen hero={{ greeting: greeting(), title: user?.name ?? "", headline: a ? (a.status === "OUT" ? "You're out.\nBack on time?" : "Your current\noutpass") : "Heading out?\nPlan your outpass", chip }} refreshing={vm.refreshing} onRefresh={vm.refresh} bell>
@@ -48,7 +49,7 @@ export default function StudentHome() {
         <FadeIn>
           <Card style={styles.hero}>
             <Text variant="title">Heading out?</Text>
-            <Text variant="body" style={{ color: color.muted }}>Your parent and warden approve on their phones.</Text>
+            <Text variant="body" style={{ color: color.muted }}>{day ? "Your faculty or HOD approves, and your parent is told." : "Your parent and warden approve on their phones."}</Text>
             <Button style={{ marginTop: 6 }} label="Request outpass" onPress={() => router.push("/outpass/new")} />
           </Card>
         </FadeIn>
@@ -64,7 +65,8 @@ export default function StudentHome() {
                 { key: "visitor", label: "Invite visitor", icon: "person-add-outline", onPress: () => router.push("/visit/new") },
                 { key: "parcels", label: "Parcels", icon: "cube-outline", badge: vm.parcelsWaiting, onPress: () => router.push("/parcels") },
                 { key: "notices", label: "Notices", icon: "megaphone-outline", badge: vm.unreadNotices, onPress: () => router.push("/notices") },
-                { key: "history", label: "History", icon: "time-outline", onPress: () => router.push("/student/history") },
+                // The helpdesk is for hostel rooms, so day scholars don't see it.
+                ...(day ? [] : [{ key: "helpdesk", label: "Helpdesk", icon: "construct-outline" as const, onPress: () => router.push("/helpdesk") }]),
                 { key: "sos", label: "SOS", icon: "alert-circle", tone: "danger", onPress: () => router.push("/sos") },
               ]}
             />

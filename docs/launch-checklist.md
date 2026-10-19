@@ -26,6 +26,8 @@ says how to tell it worked.
    | `SMS_PROVIDER` + MSG91/Twilio keys | only if you switch codes to SMS (`OTP_CHANNEL=sms`) |
    | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | from the college's Razorpay dashboard; leave unset and students pay at the office or upload a screenshot |
    | `RAZORPAY_WEBHOOK_SECRET` | the secret you set on the Razorpay webhook (step 10) |
+   | `SENTRY_DSN` | from sentry.io (free tier is enough); server errors and app crashes are sent there |
+   | `S3_BUCKET` + `S3_*` | optional: a bucket for photos once the campus is large (R2 is cheapest) |
    | `JWT_EXPIRES_IN` | leave at `15m`; the app renews tokens itself |
 
    Attach `api.outpassed.studentalumni.ai` on port 3000. Migrations run on boot.
