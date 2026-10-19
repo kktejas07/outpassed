@@ -117,6 +117,7 @@ export default function People() {
           { key: "fees", label: "Fees", icon: "wallet-outline", onPress: () => router.push("/fees-admin") },
           { key: "review", label: "Review posts", icon: "shield-checkmark-outline", onPress: () => router.push("/review") },
           { key: "offers", label: "Offers", icon: "gift-outline", onPress: () => router.push("/offers-admin") },
+          { key: "occasions", label: "Sales & seasons", icon: "sparkles-outline", onPress: () => router.push("/occasions-admin") },
           { key: "settings", label: "Settings", icon: "settings-outline", onPress: () => router.push("/settings") },
           { key: "activity", label: "Activity log", icon: "list-outline", onPress: () => router.push("/activity") },
         ]}

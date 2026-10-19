@@ -98,6 +98,7 @@ export default function MarketItem() {
       </FadeIn>
       <FadeIn index={3}>
         <Card style={{ paddingVertical: 6 }}>
+          {i.occasion ? <KeyValue label="Part of" value={i.occasion.name} /> : null}
           <KeyValue label="Condition" value={i.condition} />
           <KeyValue label="Seller" value={i.seller.name} />
           {i.seller.hostel ? <KeyValue label="Hostel" value={i.seller.hostel} /> : null}

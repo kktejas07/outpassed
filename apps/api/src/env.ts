@@ -55,6 +55,12 @@ const envSchema = z.object({
   /** Required to run first-time setup in production. */
   SETUP_TOKEN: z.string().min(12).optional(),
   /**
+   * Demo servers only: shows the seeded demo accounts on the sign-in screen so
+   * testers can sign in with one tap. Never turn this on for a real college.
+   */
+  DEMO_ACCOUNTS: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  DEMO_PASSWORD: z.string().default("outpass-demo-123"),
+  /**
    * WhatsApp, the main channel for sign-in codes and alerts. "webhook" posts
    * { to, text, kind, code } to your own server; evolution, waha and cloud
    * speak those APIs directly; "off" prints messages in development.

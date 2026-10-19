@@ -196,27 +196,45 @@ async function main() {
   const rahul = await prisma.user.findUnique({ where: { email: "rahul@outpass.dev" } });
   for (const uid of [karthik, priya, ...(rahul ? [rahul.id] : [])]) await prisma.eventRegistration.create({ data: { eventId: fest.id, userId: uid } });
 
-  // --- Buy & sell ---
+  // --- Occasions (sales and seasons with their own banner) ---
   await prisma.marketItem.deleteMany({});
+  await prisma.offer.deleteMany({});
+  await prisma.occasion.deleteMany({});
+  const DAY = 86_400_000;
+  const diwali = await prisma.occasion.create({
+    data: { name: "Diwali Dhamaka", tagline: "Lights, sweets and gifts from students and shops near campus", theme: "saffron", icon: "flame", startsAt: new Date(Date.now() - 2 * DAY), endsAt: new Date(Date.now() + 22 * DAY), createdById: admin.id },
+  });
+  await prisma.occasion.create({
+    data: { name: "Exam season essentials", tagline: "Second-hand books, calculators and lab gear before finals", theme: "teal", icon: "book", startsAt: new Date(Date.now() + 30 * DAY), endsAt: new Date(Date.now() + 50 * DAY), createdById: admin.id },
+  });
+  await prisma.occasion.create({
+    data: { name: "Freshers' move-in", tagline: "Buckets, mattresses and cycles for new hostel students", theme: "indigo", icon: "home", startsAt: new Date(Date.now() - 80 * DAY), endsAt: new Date(Date.now() - 60 * DAY), createdById: admin.id },
+  });
+
+  // --- Buy & sell ---
   const sneha = await prisma.user.findUnique({ where: { email: "sneha@outpass.dev" } });
   const items = [
     { sellerId: karthik, title: "Engineering Mathematics (Kreyszig, 10th ed.)", description: "Barely used, no markings. Pick up from Block C.", price: 350, category: "Books", condition: "Like new", status: "ACTIVE" as const },
     { sellerId: priya, title: "Hero Sprint cycle", description: "Good brakes, new tyres last month. Comes with a lock.", price: 2800, category: "Cycles", condition: "Used", status: "ACTIVE" as const },
-    { sellerId: sneha?.id ?? asha, title: "Study table lamp (LED)", description: "Three brightness levels, USB powered.", price: 400, category: "Electronics", condition: "Used", status: "ACTIVE" as const },
+    { sellerId: sneha?.id ?? asha, title: "Study table lamp (LED)", description: "Three brightness levels, USB powered.", price: 400, category: "Electronics", condition: "Used", status: "ACTIVE" as const, occasionId: diwali.id },
+    { sellerId: priya, title: "Clay diyas, set of 12 (hand-painted)", description: "Painted them myself. Pick up from Block C before Diwali.", price: 180, category: "Other", condition: "New", status: "ACTIVE" as const, occasionId: diwali.id },
+    { sellerId: karthik, title: "LED string lights, 10 m", description: "Warm white, used for one fest. Plug-in, with a remote.", price: 250, category: "Electronics", condition: "Like new", status: "ACTIVE" as const, occasionId: diwali.id },
+    { sellerId: asha, title: "Rangoli colours kit + stencils", description: "10 colours, barely opened.", price: 120, category: "Other", condition: "Like new", status: "ACTIVE" as const, occasionId: diwali.id },
     { sellerId: asha, title: "Scientific calculator fx-991", description: "Works perfectly. Allowed in exams.", price: 600, category: "Electronics", condition: "Like new", status: "ACTIVE" as const },
     { sellerId: karthik, title: "Mattress (single)", description: "Moving out of the hostel.", price: 900, category: "Furniture", condition: "Used", status: "PENDING" as const },
   ];
   for (const it of items) await prisma.marketItem.create({ data: it });
 
   // --- Offers & opportunities ---
-  await prisma.offer.deleteMany({});
   await prisma.offer.createMany({
     data: [
-      { category: "Coding & assessments", partnerName: "Code Spectra", title: "Free mock placement test", body: "A 60-minute coding and aptitude test with a detailed report. Good practice before campus drives.", url: "https://codespectra.ai", sortOrder: 10, createdById: admin.id },
-      { category: "Courses & training", partnerName: "Skyline Training Centre (near Gate 2)", title: "20% off full-stack weekend course", body: "8 weekends, project-based. Show your Outpass student ID at the desk.", couponCode: "OUTPASS20", sortOrder: 8, createdById: admin.id },
+      { category: "Coding & assessments", partnerName: "Code Spectra", title: "Free mock placement test", body: "A 60-minute coding and aptitude test with a detailed report. Good practice before campus drives.", url: "https://codespectra.ai", sortOrder: 10, showAsBanner: true, createdById: admin.id },
+      { category: "Courses & training", partnerName: "Skyline Training Centre (near Gate 2)", title: "20% off full-stack weekend course", body: "8 weekends, project-based. Show your Outpass student ID at the desk.", couponCode: "OUTPASS20", sortOrder: 8, showAsBanner: true, createdById: admin.id },
       { category: "Internships & consulting", partnerName: "Araxis Systems", title: "Summer internships: apply by 30 Nov", body: "Paid internships in software engineering and data. Final-year and pre-final-year students.", url: "https://example.com/internships", sortOrder: 6, createdById: admin.id },
       { category: "Food near campus", partnerName: "Quick delivery apps", title: "Late-night snacks and groceries", body: "Blinkit and Zepto deliver to the main gate. Collect from the security desk; the guard logs your parcel.", url: "https://blinkit.com", sortOrder: 4, createdById: admin.id },
       { category: "Coupons", partnerName: "Campus stationery", title: "10% off lab records and drafters", body: "At the stationery shop in the admin block.", couponCode: "LAB10", sortOrder: 2, createdById: admin.id },
+      { category: "Coupons", partnerName: "Sweet Magic (opp. Gate 1)", title: "15% off Diwali sweet boxes", body: "Kaju katli, motichoor and dry-fruit boxes. Show the code at the counter.", couponCode: "DIWALI15", sortOrder: 9, showAsBanner: true, occasionId: diwali.id, createdById: admin.id },
+      { category: "Food near campus", partnerName: "Quick delivery apps", title: "Diwali gift hampers delivered to the gate", body: "Order hampers and pooja items on Blinkit or Zepto; collect at the security desk.", url: "https://www.zeptonow.com", sortOrder: 3, occasionId: diwali.id, createdById: admin.id },
     ],
   });
 

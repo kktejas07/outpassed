@@ -86,6 +86,10 @@ It also seeds departments, fees, events, buy & sell listings and offers.
 It also creates passes in a few states: pending, approved, and out/overdue.
 Re-running it resets the demo activity.
 
+On a demo or staging server, set `DEMO_ACCOUNTS=true` on the API and the
+sign-in screen lists these accounts so testers sign in with one tap (web and
+mobile). Never set it for a real college.
+
 ## How it works
 
 **Outpass states**
@@ -225,6 +229,12 @@ PENDING_PARENT ──parent approves──▶ PENDING_WARDEN ──warden approv
 - **Buy & sell:** students list books, cycles, gadgets and so on. Listings are
   approved by the admin; buyers tap *I'm interested*, which tells the seller and
   opens a WhatsApp chat. Three reports hide a listing.
+- **Banners and campus sales:** a banner strip at the top of the student home
+  and Campus tab pages through running sales and offers the admin featured
+  ("Add to banner" in **People → Offers**). **People → Sales & seasons** starts a
+  sale (Diwali, exam season, freshers' move-in) with a colour, icon and dates;
+  it gets its own page, students can list items for it, and offers can be
+  tagged to it. Under-18s see the student listings but not sponsored offers.
 - **Offers & opportunities:** sponsored listings the admin adds (coding tests,
   courses and training, internships, food near campus, coupons). Every student
   sees the same list: nothing is targeted and only total taps are counted. They

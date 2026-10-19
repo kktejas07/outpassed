@@ -1,10 +1,12 @@
+import Ionicons from "@expo/vector-icons/Ionicons";
+import type { SetupStatus } from "@outpassed/shared";
 import { Link, router } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Brand } from "../../src/components/Brand";
 import { useSession } from "../../src/auth/session";
 import { api, errorMessage } from "../../src/api/client";
-import { color } from "../../src/theme/tokens";
+import { color, font, radius } from "../../src/theme/tokens";
 import { Button } from "../../src/ui/Button";
 import { ErrorNote, Segmented } from "../../src/ui/bits";
 import { Field } from "../../src/ui/Field";
@@ -25,11 +27,33 @@ export default function LoginScreen() {
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [demo, setDemo] = useState<SetupStatus["demo"]>(null);
+  const [demoBusy, setDemoBusy] = useState<string | null>(null);
 
   // A brand-new server has no admin yet: start first-time setup instead.
+  // Demo servers also list their test accounts here.
   useEffect(() => {
-    api.setupStatus().then((s) => s.needsSetup && router.replace("/setup")).catch(() => undefined);
+    api
+      .setupStatus()
+      .then((s) => {
+        if (s.needsSetup) router.replace("/setup");
+        else setDemo(s.demo ?? null);
+      })
+      .catch(() => undefined);
   }, []);
+
+  async function demoSignIn(email: string) {
+    if (!demo) return;
+    setError(null);
+    setDemoBusy(email);
+    try {
+      await signIn(email, demo.password);
+    } catch (err) {
+      setError(errorMessage(err, "Sign in failed"));
+    } finally {
+      setDemoBusy(null);
+    }
+  }
 
   async function run(fn: () => Promise<void>, fallback: string) {
     setError(null);
@@ -130,6 +154,32 @@ export default function LoginScreen() {
         </Link>
         <Text variant="caption" style={{ textAlign: "center" }}>Wardens, guards and admins get their login from the college office.</Text>
       </FadeIn>
+      {demo?.accounts.length ? (
+        <FadeIn index={3} style={styles.demo}>
+          <View style={styles.demoHead}>
+            <Ionicons name="flask-outline" size={18} color={color.indigo} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">Demo accounts</Text>
+              <Text variant="caption">Tap a role to sign in. Password for all: <Text style={styles.mono}>{demo.password}</Text></Text>
+            </View>
+          </View>
+          <View style={styles.demoGrid}>
+            {demo.accounts.map((a) => (
+              <Pressable
+                key={a.email}
+                accessibilityRole="button"
+                accessibilityLabel={`Sign in as ${a.label}, ${a.name}`}
+                disabled={!!demoBusy}
+                onPress={() => void demoSignIn(a.email)}
+                style={({ pressed }) => [styles.demoBtn, pressed && { opacity: 0.7 }, demoBusy === a.email && { backgroundColor: color.indigoTint }]}
+              >
+                <Text style={styles.demoRole}>{demoBusy === a.email ? "Signing in…" : a.label}</Text>
+                <Text variant="caption" numberOfLines={1}>{a.email}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </FadeIn>
+      ) : null}
     </Screen>
   );
 }
@@ -138,4 +188,10 @@ const styles = StyleSheet.create({
   top: { alignItems: "center", gap: 10, paddingTop: 56, paddingBottom: 20 },
   link: { textAlign: "center", alignSelf: "center", marginTop: 4 },
   info: { padding: 12, borderRadius: 14, backgroundColor: color.indigoTint },
+  demo: { marginTop: 22, padding: 14, gap: 12, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: "dashed", borderColor: color.headSub, backgroundColor: color.white },
+  demoHead: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  demoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  demoBtn: { flexGrow: 1, flexBasis: "46%", padding: 10, borderRadius: radius.sm, backgroundColor: color.ground, gap: 1 },
+  demoRole: { fontFamily: font.bodyBold, fontSize: 14, color: color.indigoDeep },
+  mono: { fontFamily: font.bodyBold, color: color.ink },
 });

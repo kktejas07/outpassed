@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { photoSrc, rupees, type EventDto, type MarketItemDto, type OfferDto } from "../api/client";
 import { useSession } from "../auth/session";
+import { BannerCarousel } from "../components/BannerCarousel";
 import { useCampusHub } from "../features/campus/useCampus";
 import { color, font, radius, shadow } from "../theme/tokens";
 import { ErrorNote, Loading, SectionTitle } from "../ui/bits";
@@ -42,7 +43,7 @@ function EventCard({ e, index }: { e: EventDto; index: number }) {
   );
 }
 
-function ItemTile({ i, index }: { i: MarketItemDto; index: number }) {
+export function ItemTile({ i, index }: { i: MarketItemDto; index: number }) {
   const src = photoSrc(i.photoUrl);
   return (
     <FadeIn index={index} style={{ width: "48%" }}>
@@ -108,6 +109,8 @@ export function CampusHubScreen() {
     >
       {vm.error ? <ErrorNote message={vm.error} onRetry={vm.refresh} /> : null}
       {vm.loading ? <Loading rows={2} /> : null}
+
+      <BannerCarousel />
 
       {fees && fees.totals.open > 0 ? (
         <FadeIn>

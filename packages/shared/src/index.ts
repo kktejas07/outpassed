@@ -90,6 +90,14 @@ export const setupStatusSchema = z.object({
   /** True when the server requires a setup key to continue. */
   tokenRequired: z.boolean(),
   institution: z.object({ name: z.string(), address: z.string() }).nullable(),
+  /** Demo servers only (DEMO_ACCOUNTS=true): one-tap sign-in for each seeded role. */
+  demo: z
+    .object({
+      password: z.string(),
+      accounts: z.array(z.object({ role: z.string(), label: z.string(), name: z.string(), email: z.string() })),
+    })
+    .nullable()
+    .default(null),
 });
 
 export const setupSchema = z.object({

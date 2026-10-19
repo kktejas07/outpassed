@@ -43,6 +43,7 @@ export type NotificationKind =
   | "FEE_PAID"
   | "FEE_PROOF_REJECTED"
   | "EVENT_PUBLISHED"
+  | "OCCASION_LIVE"
   | "EVENT_DECIDED"
   | "EVENT_PENDING"
   | "MARKET_INTEREST"

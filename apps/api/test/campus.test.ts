@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { env } from "../src/env";
 import { normalizePhone } from "../src/lib/phone";
 import { parseCsv } from "../src/lib/csv";
 import { prisma } from "../src/lib/prisma";
@@ -246,8 +247,18 @@ describe("bulk import", () => {
 describe("setup", () => {
   it("reports status and refuses once an admin exists", async () => {
     await makeUser(app, "ADMIN");
+    env.DEMO_ACCOUNTS = false; // a local .env may turn it on
     const status = (await app.inject({ method: "GET", url: "/setup" })).json();
     expect(status.needsSetup).toBe(false);
+    expect(status.demo).toBeNull(); // never shown unless the server opts in
+    env.DEMO_ACCOUNTS = true;
+    try {
+      const demo = (await app.inject({ method: "GET", url: "/setup" })).json().demo;
+      expect(demo.password).toBe(env.DEMO_PASSWORD);
+      expect(Array.isArray(demo.accounts)).toBe(true);
+    } finally {
+      env.DEMO_ACCOUNTS = false;
+    }
     const res = await app.inject({
       method: "POST",
       url: "/setup",

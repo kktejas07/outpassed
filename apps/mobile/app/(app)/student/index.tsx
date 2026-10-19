@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
+import { BannerCarousel } from "../../../src/components/BannerCarousel";
 import { OutpassCard } from "../../../src/components/OutpassCard";
 import { PassFeature } from "../../../src/components/PassFeature";
 import { useSession } from "../../../src/auth/session";
@@ -35,7 +36,7 @@ export default function StudentHome() {
         ? { label: `Out · back by ${when(a.returnBy)}`, tone: "info" }
         : a.status === "APPROVED"
           ? { label: `Pass approved · from ${when(a.leaveAt)}`, tone: "safe" }
-          : { label: a.status === "PENDING_PARENT" ? "Waiting for your parent" : "Waiting for the warden", tone: "warn" };
+          : { label: a.status === "PENDING_FACULTY" ? "Waiting for faculty" : a.status === "PENDING_PARENT" ? "Waiting for your parent" : "Waiting for the warden", tone: "warn" };
 
   return (
     <Screen hero={{ greeting: greeting(), title: user?.name ?? "", chip }} refreshing={vm.refreshing} onRefresh={vm.refresh} bell>
@@ -70,6 +71,8 @@ export default function StudentHome() {
           </Card>
         </FadeIn>
       ) : null}
+
+      {!vm.loading ? <BannerCarousel /> : null}
 
       {vm.parcelsWaiting ? (
         <FadeIn index={2}>

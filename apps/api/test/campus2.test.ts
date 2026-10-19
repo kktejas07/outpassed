@@ -267,4 +267,60 @@ describe("events, marketplace and offers", () => {
     expect(await list(adult.token)).toEqual([]);
     await app.inject({ method: "PATCH", url: "/admin/settings", headers: auth(admin.token), payload: { offersEnabled: true } });
   });
+
+  it("occasions: banner for everyone who can see it, tagged offers and listings, minors see only the sale", async () => {
+    const admin = await makeUser(app, "ADMIN");
+    await app.inject({ method: "PATCH", url: "/admin/settings", headers: auth(admin.token), payload: { offersEnabled: true, schoolMode: false } });
+    forgetSettings();
+    const bad = await app.inject({ method: "POST", url: "/admin/occasions", headers: auth(admin.token), payload: { name: "Backwards", tagline: "Ends before it starts", startsAt: hours(5), endsAt: hours(1) } });
+    expect(bad.statusCode).toBe(400);
+    const occ = (
+      await app.inject({ method: "POST", url: "/admin/occasions", headers: auth(admin.token), payload: { name: `Diwali ${tag()}`, tagline: "Lights and sweets", theme: "saffron", icon: "flame", startsAt: hours(-1), endsAt: hours(48) } })
+    ).json();
+    expect(occ.live).toBe(true);
+    const later = (
+      await app.inject({ method: "POST", url: "/admin/occasions", headers: auth(admin.token), payload: { name: `Exams ${tag()}`, tagline: "Books before finals", startsAt: hours(72), endsAt: hours(200) } })
+    ).json();
+    const offer = (
+      await app.inject({ method: "POST", url: "/admin/offers", headers: auth(admin.token), payload: { category: "Coupons", partnerName: "Sweet shop", title: "15% off sweets", body: "Show the code", couponCode: "SWEET15", showAsBanner: true, occasionId: occ.id } })
+    ).json();
+
+    const adult = await makeUser(app, "STUDENT", { dateOfBirth: "2003-05-01" });
+    const minor = await makeUser(app, "STUDENT", { dateOfBirth: new Date(Date.now() - 16 * 365 * 86_400_000).toISOString().slice(0, 10) });
+
+    // Listing for a running sale works; for one that hasn't started, it doesn't.
+    const sell = (occasionId: string) =>
+      app.inject({ method: "POST", url: "/market", headers: auth(adult.token), payload: { title: "Clay diyas set", description: "Hand painted", price: 150, category: "Other", occasionId } });
+    expect((await sell(later.id)).statusCode).toBe(400);
+    const item = (await sell(occ.id)).json();
+    expect(item.occasion).toMatchObject({ id: occ.id });
+    await app.inject({ method: "POST", url: `/admin/market/${item.id}/decision`, headers: auth(admin.token), payload: { decision: "APPROVE" } });
+
+    const banners = async (t: string) => (await app.inject({ method: "GET", url: "/banners", headers: auth(t) })).json().banners as { id: string; kind: string }[];
+    const adultBanners = (await banners(adult.token)).map((b) => b.id);
+    expect(adultBanners).toContain(`occasion:${occ.id}`);
+    expect(adultBanners).toContain(`offer:${offer.id}`);
+    expect(adultBanners).not.toContain(`occasion:${later.id}`);
+    const minorBanners = (await banners(minor.token)).map((b) => b.id);
+    expect(minorBanners).toContain(`occasion:${occ.id}`); // the student sale is fine
+    expect(minorBanners).not.toContain(`offer:${offer.id}`); // sponsored offers are not
+
+    const page = (await app.inject({ method: "GET", url: `/occasions/${occ.id}`, headers: auth(adult.token) })).json();
+    expect(page.offers.map((o: { id: string }) => o.id)).toEqual([offer.id]);
+    expect(page.items.map((i: { id: string }) => i.id)).toContain(item.id);
+    expect((await app.inject({ method: "GET", url: `/occasions/${occ.id}`, headers: auth(minor.token) })).json().offers).toEqual([]);
+    expect((await app.inject({ method: "GET", url: `/market?occasionId=${occ.id}`, headers: auth(minor.token) })).json().items).toHaveLength(1);
+
+    // School mode with offers off: no banners at all.
+    await app.inject({ method: "PATCH", url: "/admin/settings", headers: auth(admin.token), payload: { schoolMode: true, offersEnabled: false } });
+    forgetSettings();
+    expect(await banners(adult.token)).toEqual([]);
+    await app.inject({ method: "PATCH", url: "/admin/settings", headers: auth(admin.token), payload: { schoolMode: false, offersEnabled: true } });
+    forgetSettings();
+
+    // Ending an occasion takes its banner down.
+    await app.inject({ method: "PATCH", url: `/admin/occasions/${occ.id}`, headers: auth(admin.token), payload: { active: false } });
+    expect((await banners(adult.token)).map((b) => b.id)).not.toContain(`occasion:${occ.id}`);
+    expect((await app.inject({ method: "GET", url: "/admin/occasions", headers: auth(admin.token) })).json().occasions.find((o: { id: string }) => o.id === occ.id)).toMatchObject({ offers: 1, items: 1, active: false });
+  });
 });

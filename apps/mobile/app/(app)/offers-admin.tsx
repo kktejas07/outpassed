@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { StyleSheet, Switch, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Pressable, StyleSheet, Switch, View } from "react-native";
 import { campus, errorMessage } from "../../src/api/client";
 import { useSession } from "../../src/auth/session";
 import { useQuery } from "../../src/lib/useQuery";
@@ -24,6 +25,8 @@ export default function OffersAdmin() {
   const [body, setBody] = useState("");
   const [url, setUrl] = useState("");
   const [couponCode, setCoupon] = useState("");
+  const [banner, setBanner] = useState(false);
+  const [occasionId, setOccasionId] = useState("none");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const valid = partnerName.trim() && title.trim().length >= 3 && body.trim() && (!url || /^https?:\/\//.test(url.trim()));
@@ -33,10 +36,10 @@ export default function OffersAdmin() {
     setBusy(true);
     setError(null);
     try {
-      await campus.createOffer(token, { category, partnerName: partnerName.trim(), title: title.trim(), body: body.trim(), url: url.trim() || undefined, couponCode: couponCode.trim() || undefined });
+      await campus.createOffer(token, { category, partnerName: partnerName.trim(), title: title.trim(), body: body.trim(), url: url.trim() || undefined, couponCode: couponCode.trim() || undefined, showAsBanner: banner, occasionId: occasionId === "none" ? null : occasionId });
       ribbon.show({ tone: "success", title: "Offer added", body: "Adult students see it on the Campus tab." });
       setAdding(false);
-      setPartner(""); setTitle(""); setBody(""); setUrl(""); setCoupon("");
+      setPartner(""); setTitle(""); setBody(""); setUrl(""); setCoupon(""); setBanner(false); setOccasionId("none");
       void q.reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -56,6 +59,19 @@ export default function OffersAdmin() {
           <Field label="Details" value={body} onChangeText={setBody} multiline placeholder="What students get and how" />
           <Field label="Link (optional)" value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" placeholder="https://…" />
           <Field label="Coupon code (optional)" value={couponCode} onChangeText={setCoupon} autoCapitalize="characters" />
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text variant="label">Show in the banner strip</Text>
+              <Text variant="caption">A large slide at the top of the student home and Campus tab.</Text>
+            </View>
+            <Switch accessibilityLabel="Show in the banner strip" value={banner} onValueChange={setBanner} trackColor={{ true: color.indigo, false: color.line }} />
+          </View>
+          {q.data?.occasions.length ? (
+            <>
+              <Text variant="eyebrow">Part of a campus sale</Text>
+              <Chips options={[{ value: "none", label: "No" }, ...q.data.occasions.map((o) => ({ value: o.id, label: o.name }))]} value={occasionId} onChange={setOccasionId} />
+            </>
+          ) : null}
           {error ? <ErrorNote message={error} /> : null}
           <Button icon="checkmark" label="Add offer" loading={busy} disabled={!valid} onPress={add} />
         </PopIn>
@@ -70,6 +86,20 @@ export default function OffersAdmin() {
               <Text variant="eyebrow">{o.category} · {o.partnerName}</Text>
               <Text variant="label">{o.title}</Text>
               <Text variant="caption"><Text style={styles.clicks}>{o.clicks}</Text> taps in total</Text>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: !!o.showAsBanner }}
+                onPress={async () => {
+                  if (!token) return;
+                  await campus.setOfferBanner(token, o.id, !o.showAsBanner).catch(() => undefined);
+                  ribbon.show({ tone: "info", title: o.showAsBanner ? "Taken out of the banner strip" : "Now in the banner strip" });
+                  void q.reload();
+                }}
+                style={[styles.bannerChip, o.showAsBanner && styles.bannerOn]}
+              >
+                <Ionicons name={o.showAsBanner ? "albums" : "albums-outline"} size={13} color={o.showAsBanner ? color.white : color.indigo} />
+                <Text style={[styles.bannerText, o.showAsBanner && { color: color.white }]}>{o.showAsBanner ? "In banner" : "Add to banner"}</Text>
+              </Pressable>
             </View>
             <Switch
               accessibilityLabel={o.active ? "Pause offer" : "Show offer"}
@@ -92,4 +122,8 @@ const styles = StyleSheet.create({
   form: { backgroundColor: color.white, borderRadius: radius.lg, padding: 16, gap: 12 },
   card: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: color.white, borderRadius: radius.lg, padding: 14 },
   clicks: { fontFamily: font.bodyBold, color: color.ink },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  bannerChip: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", marginTop: 6, paddingHorizontal: 10, height: 26, borderRadius: radius.pill, backgroundColor: color.indigoTint },
+  bannerOn: { backgroundColor: color.indigo },
+  bannerText: { fontFamily: font.bodyBold, fontSize: 12, color: color.indigo },
 });

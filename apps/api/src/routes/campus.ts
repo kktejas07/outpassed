@@ -72,6 +72,7 @@ const MARKET_CATEGORIES = ["Books", "Electronics", "Cycles", "Furniture", "Cloth
 const itemInclude = {
   seller: { select: { id: true, name: true, phoneNormalized: true, student: { select: { hostel: true } } } },
   _count: { select: { interests: true } },
+  occasion: { select: { id: true, name: true, theme: true } },
 } satisfies Prisma.MarketItemInclude;
 type ItemRow = Prisma.MarketItemGetPayload<{ include: typeof itemInclude }>;
 
@@ -87,6 +88,7 @@ function toItemDto(i: ItemRow, viewerId: string, interested: boolean) {
     status: i.status,
     photoUrl: i.photoMime ? mediaUrl("market", i.id, Math.floor(i.updatedAt.getTime() / 1000)) : null,
     seller: { id: i.seller.id, name: i.seller.name, hostel: i.seller.student?.hostel ?? null },
+    occasion: i.occasion,
     mine,
     interested,
     interests: mine ? i._count.interests : null,
@@ -113,7 +115,73 @@ const offerBody = z.object({
   couponCode: z.string().trim().max(40).optional(),
   activeTo: z.iso.datetime().optional(),
   sortOrder: z.number().int().min(-1000).max(1000).default(0),
+  showAsBanner: z.boolean().default(false),
+  occasionId: z.uuid().nullable().optional(),
 });
+
+type OfferRow = Prisma.OfferGetPayload<object>;
+const toOfferDto = (o: OfferRow) => ({
+  id: o.id,
+  category: o.category,
+  partnerName: o.partnerName,
+  title: o.title,
+  body: o.body,
+  url: o.url,
+  couponCode: o.couponCode,
+  activeTo: o.activeTo?.toISOString() ?? null,
+  showAsBanner: o.showAsBanner,
+  occasionId: o.occasionId,
+});
+
+const liveOffer = (now: Date): Prisma.OfferWhereInput => ({ active: true, activeFrom: { lte: now }, OR: [{ activeTo: null }, { activeTo: { gte: now } }] });
+
+// ---------------------------------------------------------------- occasions
+
+/** Banner colour themes the app knows how to draw. */
+export const OCCASION_THEMES = ["indigo", "teal", "saffron", "rose", "forest", "night"] as const;
+/** Ionicons the admin can pick for an occasion. */
+export const OCCASION_ICONS = ["sparkles", "flame", "gift", "book", "school", "home", "musical-notes", "trophy", "rocket", "heart", "cart", "sunny"] as const;
+
+const occasionBody = z
+  .object({
+    name: z.string().trim().min(3).max(60),
+    tagline: z.string().trim().min(3).max(140),
+    theme: z.enum(OCCASION_THEMES).default("indigo"),
+    icon: z.enum(OCCASION_ICONS).default("sparkles"),
+    startsAt: z.iso.datetime(),
+    endsAt: z.iso.datetime(),
+  })
+  .refine((o) => new Date(o.endsAt) > new Date(o.startsAt), { message: "The end must be after the start", path: ["endsAt"] });
+
+type OccasionRow = Prisma.OccasionGetPayload<object>;
+const toOccasionDto = (o: OccasionRow, now = new Date()) => ({
+  id: o.id,
+  name: o.name,
+  tagline: o.tagline,
+  theme: o.theme,
+  icon: o.icon,
+  startsAt: o.startsAt.toISOString(),
+  endsAt: o.endsAt.toISOString(),
+  active: o.active,
+  live: o.active && o.startsAt <= now && o.endsAt >= now,
+});
+
+const liveOccasion = (now: Date): Prisma.OccasionWhereInput => ({ active: true, startsAt: { lte: now }, endsAt: { gte: now } });
+
+/** Category → banner theme and icon for a featured offer. */
+const OFFER_LOOK: Record<string, { theme: string; icon: string }> = {
+  "Coding & assessments": { theme: "night", icon: "code-slash" },
+  "Courses & training": { theme: "teal", icon: "school" },
+  "Internships & consulting": { theme: "indigo", icon: "briefcase" },
+  "Food near campus": { theme: "saffron", icon: "fast-food" },
+  Coupons: { theme: "rose", icon: "pricetags" },
+};
+
+/** What this person may see: offers (adult students, offers on) and the marketplace (not school mode). */
+async function audience(request: FastifyRequest) {
+  const [user, settings] = await Promise.all([prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: userInclude }), campusSettings()]);
+  return { offers: toUserDto(user).showOffers || isAdmin(request), market: !settings.schoolMode };
+}
 
 export async function campusRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
@@ -221,11 +289,12 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/market", async (request) => {
     await marketAllowed();
-    const q = z.object({ scope: z.enum(["browse", "mine", "pending"]).default("browse"), category: z.string().max(40).optional(), q: z.string().trim().max(80).optional() }).parse(request.query);
+    const q = z.object({ scope: z.enum(["browse", "mine", "pending"]).default("browse"), category: z.string().max(40).optional(), q: z.string().trim().max(80).optional(), occasionId: z.uuid().optional() }).parse(request.query);
     if (q.scope === "pending") requireRole(request, "ADMIN");
     const where: Prisma.MarketItemWhereInput = {
       ...(q.scope === "browse" ? { status: "ACTIVE" } : q.scope === "mine" ? { sellerId: request.user.sub, status: { not: "REMOVED" } } : { status: "PENDING" }),
       ...(q.category ? { category: q.category } : {}),
+      ...(q.occasionId ? { occasionId: q.occasionId } : {}),
       ...(q.q ? { OR: [{ title: { contains: q.q, mode: "insensitive" } }, { description: { contains: q.q, mode: "insensitive" } }] } : {}),
     };
     const rows = await prisma.marketItem.findMany({ where, include: itemInclude, orderBy: { createdAt: "desc" }, take: 100 });
@@ -253,12 +322,16 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
         category: z.enum(MARKET_CATEGORIES),
         condition: z.enum(["New", "Like new", "Used", "Needs repair"]).default("Used"),
         photo: z.string().min(100).max(700_000).optional(),
+        occasionId: z.uuid().optional(),
       })
       .parse(request.body);
+    if (body.occasionId && !(await prisma.occasion.findFirst({ where: { id: body.occasionId, ...liveOccasion(new Date()) } }))) {
+      throw new HttpError(400, "OCCASION_OVER", "That sale isn't running right now");
+    }
     const photo = body.photo ? decodePhoto(body.photo) : null;
     const admin = isAdmin(request);
     const item = await prisma.marketItem.create({
-      data: { sellerId: request.user.sub, title: body.title, description: body.description, price: body.price, category: body.category, condition: body.condition, status: admin ? "ACTIVE" : "PENDING", ...(photo ? { photo: photo.data, photoMime: photo.mime } : {}) },
+      data: { sellerId: request.user.sub, title: body.title, description: body.description, price: body.price, category: body.category, condition: body.condition, status: admin ? "ACTIVE" : "PENDING", occasionId: body.occasionId ?? null, ...(photo ? { photo: photo.data, photoMime: photo.mime } : {}) },
       include: itemInclude,
     });
     if (!admin) notifyLater(await idsOfRoles(["ADMIN"]), { kind: "MARKET_PENDING", title: `New listing to review: ${item.title}`, body: `${item.seller.name} · ₹${item.price}`, data: { itemId: item.id } });
@@ -332,6 +405,122 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+  // ---- banners & occasions ----
+
+  /**
+   * The banner strip on the student home and Campus tab: live occasions first,
+   * then offers the admin featured. Same for everyone who may see them.
+   */
+  app.get("/banners", async (request) => {
+    const can = await audience(request);
+    if (!can.offers && !can.market) return { banners: [] };
+    const now = new Date();
+    const [occasions, featured] = await Promise.all([
+      prisma.occasion.findMany({ where: liveOccasion(now), orderBy: { startsAt: "asc" }, take: 5 }),
+      can.offers ? prisma.offer.findMany({ where: { ...liveOffer(now), showAsBanner: true }, orderBy: [{ sortOrder: "desc" }, { createdAt: "desc" }], take: 6 }) : Promise.resolve([]),
+    ]);
+    return {
+      banners: [
+        ...occasions.map((o) => ({
+          id: `occasion:${o.id}`,
+          kind: "OCCASION" as const,
+          title: o.name,
+          subtitle: o.tagline,
+          theme: o.theme,
+          icon: o.icon,
+          cta: can.market ? "Shop the sale" : "See offers",
+          occasionId: o.id,
+          offerId: null,
+          endsAt: o.endsAt.toISOString(),
+          sponsor: null,
+        })),
+        ...featured.map((o) => ({
+          id: `offer:${o.id}`,
+          kind: "OFFER" as const,
+          title: o.title,
+          subtitle: o.body,
+          theme: OFFER_LOOK[o.category]?.theme ?? "indigo",
+          icon: OFFER_LOOK[o.category]?.icon ?? "gift",
+          cta: o.couponCode ? `Code ${o.couponCode}` : "View offer",
+          occasionId: o.occasionId,
+          offerId: o.id,
+          endsAt: o.activeTo?.toISOString() ?? null,
+          sponsor: o.partnerName,
+        })),
+      ],
+    };
+  });
+
+  /** Running and coming-up occasions (the sell form offers the live ones). */
+  app.get("/occasions", async () => {
+    const now = new Date();
+    const rows = await prisma.occasion.findMany({ where: { active: true, endsAt: { gte: now } }, orderBy: { startsAt: "asc" }, take: 20 });
+    return { occasions: rows.map((o) => toOccasionDto(o, now)) };
+  });
+
+  /** One occasion's page: its offers and student listings. */
+  app.get("/occasions/:id", async (request) => {
+    const { id } = idParamSchema.parse(request.params);
+    const o = await prisma.occasion.findUnique({ where: { id } });
+    if (!o || (!o.active && !isAdmin(request))) throw new HttpError(404, "NOT_FOUND", "Occasion not found");
+    const can = await audience(request);
+    const now = new Date();
+    const [offers, items] = await Promise.all([
+      can.offers ? prisma.offer.findMany({ where: { ...liveOffer(now), occasionId: id }, orderBy: [{ sortOrder: "desc" }, { createdAt: "desc" }] }) : Promise.resolve([]),
+      can.market ? prisma.marketItem.findMany({ where: { occasionId: id, status: "ACTIVE" }, include: itemInclude, orderBy: { createdAt: "desc" }, take: 60 }) : Promise.resolve([]),
+    ]);
+    const interested = new Set((await prisma.marketInterest.findMany({ where: { buyerId: request.user.sub, itemId: { in: items.map((r) => r.id) } }, select: { itemId: true } })).map((r) => r.itemId));
+    return {
+      occasion: toOccasionDto(o, now),
+      offers: offers.map(toOfferDto),
+      items: items.map((i) => toItemDto(i, request.user.sub, interested.has(i.id))),
+      marketAvailable: can.market,
+    };
+  });
+
+  app.get("/admin/occasions", async (request) => {
+    requireRole(request, "ADMIN");
+    const rows = await prisma.occasion.findMany({ include: { _count: { select: { offers: true, items: true } } }, orderBy: { startsAt: "desc" }, take: 100 });
+    return { occasions: rows.map((o) => ({ ...toOccasionDto(o), offers: o._count.offers, items: o._count.items })), themes: OCCASION_THEMES, icons: OCCASION_ICONS };
+  });
+
+  app.post("/admin/occasions", async (request, reply) => {
+    requireRole(request, "ADMIN");
+    const body = occasionBody.parse(request.body);
+    const o = await prisma.occasion.create({ data: { ...body, startsAt: new Date(body.startsAt), endsAt: new Date(body.endsAt), createdById: request.user.sub } });
+    // Tell students when a sale starts now; future ones show up on their day.
+    if (o.startsAt <= new Date()) {
+      notifyLater(await idsOfRoles(["STUDENT"]), { kind: "OCCASION_LIVE", title: o.name, body: o.tagline, data: { occasionId: o.id } });
+    }
+    await audit(request, "OCCASION_CREATED", `Added occasion "${o.name}"`, { type: "occasion", id: o.id });
+    return reply.status(201).send(toOccasionDto(o));
+  });
+
+  app.patch("/admin/occasions/:id", async (request) => {
+    requireRole(request, "ADMIN");
+    const { id } = idParamSchema.parse(request.params);
+    const body = z
+      .object({
+        name: z.string().trim().min(3).max(60),
+        tagline: z.string().trim().min(3).max(140),
+        theme: z.enum(OCCASION_THEMES),
+        icon: z.enum(OCCASION_ICONS),
+        startsAt: z.iso.datetime(),
+        endsAt: z.iso.datetime(),
+        active: z.boolean(),
+      })
+      .partial()
+      .parse(request.body);
+    const o = await prisma.occasion.update({
+      where: { id },
+      data: { ...body, ...(body.startsAt ? { startsAt: new Date(body.startsAt) } : {}), ...(body.endsAt ? { endsAt: new Date(body.endsAt) } : {}) },
+    }).catch(() => null);
+    if (!o) throw new HttpError(404, "NOT_FOUND", "Occasion not found");
+    if (o.endsAt <= o.startsAt) throw new HttpError(400, "BAD_DATES", "The end must be after the start");
+    await audit(request, "OCCASION_UPDATED", `${body.active === false ? "Ended" : "Updated"} occasion "${o.name}"`, { type: "occasion", id });
+    return toOccasionDto(o);
+  });
+
   // ---- offers & opportunities ----
 
   /** The same list for every adult student; nothing is personalised or tracked per person. */
@@ -339,15 +528,8 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: userInclude });
     if (!toUserDto(user).showOffers && !isAdmin(request)) return { offers: [], categories: OFFER_CATEGORIES };
     const now = new Date();
-    const rows = await prisma.offer.findMany({
-      where: { active: true, activeFrom: { lte: now }, OR: [{ activeTo: null }, { activeTo: { gte: now } }] },
-      orderBy: [{ sortOrder: "desc" }, { createdAt: "desc" }],
-      take: 100,
-    });
-    return {
-      offers: rows.map((o) => ({ id: o.id, category: o.category, partnerName: o.partnerName, title: o.title, body: o.body, url: o.url, couponCode: o.couponCode, activeTo: o.activeTo?.toISOString() ?? null })),
-      categories: OFFER_CATEGORIES,
-    };
+    const rows = await prisma.offer.findMany({ where: liveOffer(now), orderBy: [{ sortOrder: "desc" }, { createdAt: "desc" }], take: 100 });
+    return { offers: rows.map(toOfferDto), categories: OFFER_CATEGORIES };
   });
 
   /** Counts a tap (in total only) and returns where to go. */
@@ -361,13 +543,19 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
   app.get("/admin/offers", async (request) => {
     requireRole(request, "ADMIN");
     const rows = await prisma.offer.findMany({ orderBy: [{ active: "desc" }, { sortOrder: "desc" }, { createdAt: "desc" }] });
-    return { offers: rows.map((o) => ({ ...o, activeFrom: o.activeFrom.toISOString(), activeTo: o.activeTo?.toISOString() ?? null, createdAt: o.createdAt.toISOString() })), categories: OFFER_CATEGORIES };
+    const occasions = await prisma.occasion.findMany({ where: { active: true, endsAt: { gte: new Date() } }, orderBy: { startsAt: "asc" } });
+    return {
+      offers: rows.map((o) => ({ ...o, activeFrom: o.activeFrom.toISOString(), activeTo: o.activeTo?.toISOString() ?? null, createdAt: o.createdAt.toISOString() })),
+      categories: OFFER_CATEGORIES,
+      occasions: occasions.map((x) => toOccasionDto(x)),
+    };
   });
 
   app.post("/admin/offers", async (request, reply) => {
     requireRole(request, "ADMIN");
     const body = offerBody.parse(request.body);
-    const o = await prisma.offer.create({ data: { ...body, url: body.url ?? null, couponCode: body.couponCode ?? null, activeTo: body.activeTo ? new Date(body.activeTo) : null, createdById: request.user.sub } });
+    if (body.occasionId) await prisma.occasion.findUniqueOrThrow({ where: { id: body.occasionId } }).catch(() => { throw new HttpError(400, "BAD_OCCASION", "That occasion doesn't exist"); });
+    const o = await prisma.offer.create({ data: { ...body, occasionId: body.occasionId ?? null, url: body.url ?? null, couponCode: body.couponCode ?? null, activeTo: body.activeTo ? new Date(body.activeTo) : null, createdById: request.user.sub } });
     await audit(request, "OFFER_CREATED", `Added offer "${o.title}" from ${o.partnerName}`, { type: "offer", id: o.id });
     return reply.status(201).send(o);
   });
@@ -376,6 +564,7 @@ export async function campusRoutes(app: FastifyInstance): Promise<void> {
     requireRole(request, "ADMIN");
     const { id } = idParamSchema.parse(request.params);
     const body = offerBody.partial().extend({ active: z.boolean().optional() }).parse(request.body);
+    if (body.occasionId) await prisma.occasion.findUniqueOrThrow({ where: { id: body.occasionId } }).catch(() => { throw new HttpError(400, "BAD_OCCASION", "That occasion doesn't exist"); });
     const o = await prisma.offer.update({ where: { id }, data: { ...body, ...(body.activeTo ? { activeTo: new Date(body.activeTo) } : {}) } });
     await audit(request, "OFFER_UPDATED", `${body.active === false ? "Paused" : "Updated"} offer "${o.title}"`, { type: "offer", id });
     return o;

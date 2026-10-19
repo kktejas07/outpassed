@@ -127,6 +127,7 @@ model User {
   marketItems     MarketItem[]
   marketInterests MarketInterest[]
   offersCreated   Offer[]
+  occasionsCreated Occasion[]
 
   @@index([role])
   @@index([phoneNormalized])
@@ -752,11 +753,14 @@ model MarketItem {
   photo       Bytes?
   photoMime   String?
   reports     Int              @default(0)
+  occasionId  String?
+  occasion    Occasion?        @relation(fields: [occasionId], references: [id], onDelete: SetNull)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   interests   MarketInterest[]
 
   @@index([status, createdAt])
+  @@index([occasionId])
   @@map("market_items")
 }
 
@@ -786,10 +790,37 @@ model Offer {
   sortOrder   Int       @default(0)
   /// Total taps, not per person.
   clicks      Int       @default(0)
+  /// Featured in the banner strip on the student home and Campus tab.
+  showAsBanner Boolean  @default(false)
+  occasionId  String?
+  occasion    Occasion? @relation(fields: [occasionId], references: [id], onDelete: SetNull)
   createdById String
   createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
 
   @@index([active, sortOrder])
   @@map("offers")
+}
+
+/// A time-boxed campaign (Diwali sale, exam season, freshers' move-in) with
+/// its own banner; offers and student listings can be tagged to it.
+model Occasion {
+  id          String       @id @default(uuid())
+  name        String
+  tagline     String
+  /// One of the app's banner themes (indigo, teal, saffron, rose, forest, night).
+  theme       String       @default("indigo")
+  /// An Ionicons name.
+  icon        String       @default("sparkles")
+  startsAt    DateTime
+  endsAt      DateTime
+  active      Boolean      @default(true)
+  createdById String
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  offers      Offer[]
+  items       MarketItem[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("occasions")
 }

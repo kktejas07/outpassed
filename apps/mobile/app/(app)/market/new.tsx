@@ -1,9 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
 import { campus, errorMessage } from "../../../src/api/client";
 import { useSession } from "../../../src/auth/session";
+import { useQuery } from "../../../src/lib/useQuery";
 import { pickPhoto } from "../../../src/features/photo/pickPhoto";
 import { color, radius } from "../../../src/theme/tokens";
 import { Button } from "../../../src/ui/Button";
@@ -26,6 +27,9 @@ export default function Sell() {
   const [category, setCategory] = useState("Books");
   const [condition, setCondition] = useState("Used");
   const [photo, setPhoto] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ occasionId?: string }>();
+  const [occasionId, setOccasionId] = useState(params.occasionId ?? "none");
+  const sales = useQuery((t) => campus.occasions(t)).data?.filter((o) => o.live) ?? [];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const valid = title.trim().length >= 3 && description.trim().length > 0 && price !== "";
@@ -44,7 +48,7 @@ export default function Sell() {
     setBusy(true);
     setError(null);
     try {
-      const item = await campus.sell(token, { title: title.trim(), description: description.trim(), price: Number(price), category, condition, photo: photo ?? undefined });
+      const item = await campus.sell(token, { title: title.trim(), description: description.trim(), price: Number(price), category, condition, photo: photo ?? undefined, occasionId: occasionId !== "none" ? occasionId : undefined });
       router.replace(`/market/${item.id}`);
       ribbon.show({ tone: "success", title: "Listing sent for review", body: "The office checks listings first. You'll get a message when it's live." });
     } catch (err) {
@@ -80,6 +84,12 @@ export default function Sell() {
         <Chips options={categories} value={category} onChange={setCategory} />
         <Text variant="eyebrow">Condition</Text>
         <Chips options={conditions} value={condition} onChange={setCondition} />
+        {sales.length ? (
+          <>
+            <Text variant="eyebrow">Part of a campus sale?</Text>
+            <Chips options={[{ value: "none", label: "No" }, ...sales.map((o) => ({ value: o.id, label: o.name }))]} value={occasionId} onChange={setOccasionId} />
+          </>
+        ) : null}
       </FadeIn>
       <Text variant="caption">Buyers tap "I'm interested" and can then message you on WhatsApp. Meet on campus and pay in person.</Text>
       {error ? <ErrorNote message={error} /> : null}

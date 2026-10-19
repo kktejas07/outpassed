@@ -318,9 +318,36 @@ export type MarketItemDto = {
   interested: boolean;
   interests: number | null;
   contactUrl: string | null;
+  occasion: { id: string; name: string; theme: string } | null;
   createdAt: string;
 };
-export type OfferDto = { id: string; category: string; partnerName: string; title: string; body: string; url: string | null; couponCode: string | null; activeTo: string | null };
+export type OfferDto = {
+  id: string;
+  category: string;
+  partnerName: string;
+  title: string;
+  body: string;
+  url: string | null;
+  couponCode: string | null;
+  activeTo: string | null;
+  showAsBanner?: boolean;
+  occasionId?: string | null;
+};
+export type OccasionDto = { id: string; name: string; tagline: string; theme: string; icon: string; startsAt: string; endsAt: string; active: boolean; live: boolean };
+export type BannerDto = {
+  id: string;
+  kind: "OCCASION" | "OFFER";
+  title: string;
+  subtitle: string;
+  theme: string;
+  icon: string;
+  cta: string;
+  occasionId: string | null;
+  offerId: string | null;
+  endsAt: string | null;
+  sponsor: string | null;
+};
+export type OccasionInput = { name: string; tagline: string; theme: string; icon: string; startsAt: string; endsAt: string };
 export type CampusSettings = { offersEnabled: boolean; schoolMode: boolean; requireGatePhoto: boolean; institutionName: string };
 
 export const campus = {
@@ -352,10 +379,10 @@ export const campus = {
   register: (token: string, id: string) => request<EventDto>(`/events/${id}/register`, { method: "POST", token }),
   unregister: (token: string, id: string) => request<EventDto>(`/events/${id}/register`, { method: "DELETE", token }),
 
-  market: (token: string, opts: { scope?: "browse" | "mine" | "pending"; category?: string; q?: string } = {}) =>
+  market: (token: string, opts: { scope?: "browse" | "mine" | "pending"; category?: string; q?: string; occasionId?: string } = {}) =>
     request<{ items: MarketItemDto[]; categories: string[] }>(`/market${qs(opts)}`, { token }),
   marketItem: (token: string, id: string) => request<MarketItemDto>(`/market/${id}`, { token }),
-  sell: (token: string, input: { title: string; description: string; price: number; category: string; condition: string; photo?: string }) =>
+  sell: (token: string, input: { title: string; description: string; price: number; category: string; condition: string; photo?: string; occasionId?: string }) =>
     request<MarketItemDto>("/market", { method: "POST", token, body: input }),
   interested: (token: string, id: string) => request<MarketItemDto>(`/market/${id}/interest`, { method: "POST", token }),
   sold: (token: string, id: string) => request<MarketItemDto>(`/market/${id}/sold`, { method: "POST", token }),
@@ -365,10 +392,19 @@ export const campus = {
 
   offers: (token: string) => request<{ offers: OfferDto[]; categories: string[] }>("/offers", { token }),
   openOffer: (token: string, id: string) => request<{ url: string | null }>(`/offers/${id}/open`, { method: "POST", token }),
-  adminOffers: (token: string) => request<{ offers: (OfferDto & { active: boolean; clicks: number; sortOrder: number })[]; categories: string[] }>("/admin/offers", { token }),
-  createOffer: (token: string, input: { category: string; partnerName: string; title: string; body: string; url?: string; couponCode?: string; sortOrder?: number }) =>
+  adminOffers: (token: string) =>
+    request<{ offers: (OfferDto & { active: boolean; clicks: number; sortOrder: number })[]; categories: string[]; occasions: OccasionDto[] }>("/admin/offers", { token }),
+  createOffer: (token: string, input: { category: string; partnerName: string; title: string; body: string; url?: string; couponCode?: string; sortOrder?: number; showAsBanner?: boolean; occasionId?: string | null }) =>
     request<OfferDto>("/admin/offers", { method: "POST", token, body: input }),
   setOfferActive: (token: string, id: string, active: boolean) => request<OfferDto>(`/admin/offers/${id}`, { method: "PATCH", token, body: { active } }),
+  setOfferBanner: (token: string, id: string, showAsBanner: boolean) => request<OfferDto>(`/admin/offers/${id}`, { method: "PATCH", token, body: { showAsBanner } }),
+
+  banners: (token: string) => request<{ banners: BannerDto[] }>("/banners", { token }).then((r) => r.banners),
+  occasions: (token: string) => request<{ occasions: OccasionDto[] }>("/occasions", { token }).then((r) => r.occasions),
+  occasion: (token: string, id: string) => request<{ occasion: OccasionDto; offers: OfferDto[]; items: MarketItemDto[]; marketAvailable: boolean }>(`/occasions/${id}`, { token }),
+  adminOccasions: (token: string) => request<{ occasions: (OccasionDto & { offers: number; items: number })[]; themes: string[]; icons: string[] }>("/admin/occasions", { token }),
+  createOccasion: (token: string, input: OccasionInput) => request<OccasionDto>("/admin/occasions", { method: "POST", token, body: input }),
+  updateOccasion: (token: string, id: string, input: Partial<OccasionInput & { active: boolean }>) => request<OccasionDto>(`/admin/occasions/${id}`, { method: "PATCH", token, body: input }),
 
   gatePhoto: (token: string, eventId: string, image: string) => request<{ photoUrl: string }>(`/gate/events/${eventId}/photo`, { method: "PUT", token, body: { image } }),
 };

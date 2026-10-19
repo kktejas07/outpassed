@@ -26,6 +26,29 @@ function tokenOk(given: string | undefined): boolean {
  * First-time setup for a new college: its name, the first admin account and
  * its hostels. Works only until an admin exists.
  */
+/** The seeded demo logins, in the order a tester usually tries them. */
+const DEMO = [
+  { email: "student@outpass.dev", label: "Student" },
+  { email: "parent@outpass.dev", label: "Parent" },
+  { email: "faculty@outpass.dev", label: "Faculty (HOD)" },
+  { email: "anita@outpass.dev", label: "Faculty" },
+  { email: "warden@outpass.dev", label: "Warden" },
+  { email: "guard@outpass.dev", label: "Guard" },
+  { email: "admin@outpass.dev", label: "Admin" },
+];
+
+async function demoAccounts() {
+  const users = await prisma.user.findMany({ where: { email: { in: DEMO.map((d) => d.email) } }, select: { email: true, name: true, role: true } });
+  const byEmail = new Map(users.map((u) => [u.email, u]));
+  return {
+    password: env.DEMO_PASSWORD,
+    accounts: DEMO.flatMap((d) => {
+      const u = byEmail.get(d.email);
+      return u?.email ? [{ role: u.role, label: d.label, name: u.name, email: u.email }] : [];
+    }),
+  };
+}
+
 export async function setupRoutes(app: FastifyInstance): Promise<void> {
   app.get("/setup", async () => {
     const [admins, institution] = await Promise.all([
@@ -36,6 +59,7 @@ export async function setupRoutes(app: FastifyInstance): Promise<void> {
       needsSetup: admins === 0,
       tokenRequired: tokenRequired(),
       institution: institution ? { name: institution.name, address: institution.address } : null,
+      demo: env.DEMO_ACCOUNTS ? await demoAccounts() : null,
     };
     return status;
   });
